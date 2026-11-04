@@ -1,0 +1,18 @@
+{
+  "name": "Firedoor",
+  "tagline": "Contain the spread. Prove the boundary.",
+  "technical_line": "Terraform declares. Kubernetes enforces. Go verifies. Firedoor proves.",
+  "colors": {
+    "porcelain": "#F2EDE3",
+    "structural_slate": "#243B45",
+    "fire_red": "#C84938",
+    "inspection_amber": "#E2AC53",
+    "safety_green": "#4F9274",
+    "concrete": "#9AA0A6"
+  },
+  "type": {
+    "display": "Barlow Condensed",
+    "body": "IBM Plex Sans",
+    "mono": "IBM Plex Mono"
+  }
+}

@@ -1,0 +1,36 @@
+# Terraform: never commit state, generated plans, provider downloads or secret vars.
+**/.terraform/
+**/*.tfstate
+**/*.tfstate.*
+**/*.tfplan
+**/*.tfvars
+**/*.tfvars.json
+**/.terraform.tfstate.lock.info
+# IMPORTANT: .terraform.lock.hcl is intentionally NOT ignored.
+
+# Credentials and environment-specific files
+.env
+.env.*
+!.env.example
+**/kubeconfig
+**/kubeconfig.*
+**/*.kubeconfig
+*.pem
+*.key
+
+# Build output, local run/evidence data
+/bin/
+/dist/
+/coverage/
+/var/
+/artifacts/
+/docs/evidence/local/
+*.exe
+*.test
+*.out
+
+# Editor / OS noise
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

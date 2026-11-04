@@ -1,0 +1,34 @@
+{
+  "schema_version": "1.0.0",
+  "id": "FD-005",
+  "name": "Privileged Workload Admission",
+  "status": "spec_only_not_implemented",
+  "claim": "Unsafe workload specification is rejected by configured admission controls",
+  "mapped_controls": [
+    "C-008",
+    "C-011"
+  ],
+  "scope": {
+    "cluster": "kind-firedoor-local",
+    "ownership": "Firedoor-owned disposable local cluster only",
+    "operation": "server-side dry-run admission attempt with synthetic Pod specification"
+  },
+  "profiles": {
+    "baseline": "intentionally testable synthetic lab configuration; exact expectations to be specified before implementation",
+    "hardened": "restricted behavior expected only where independent health and enforcement controls pass"
+  },
+  "preflight": [
+    "verified cluster ownership",
+    "verified in-scope workload identity",
+    "healthy destination or API",
+    "bounded timeouts and cleanup",
+    "CNI verified where network-dependent"
+  ],
+  "safety": [
+    "no real credentials",
+    "no external targets",
+    "no mutation of Terraform-owned resources from Go",
+    "inconclusive on ambiguous observation"
+  ],
+  "implementation_milestone": "v0.4"
+}
