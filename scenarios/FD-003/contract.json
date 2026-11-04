@@ -1,0 +1,34 @@
+{
+  "schema_version": "1.0.0",
+  "id": "FD-003",
+  "name": "Secret Boundary",
+  "status": "spec_only_not_implemented",
+  "claim": "Unrelated workload ServiceAccount cannot read synthetic secret",
+  "mapped_controls": [
+    "C-003",
+    "C-013"
+  ],
+  "scope": {
+    "cluster": "kind-firedoor-local",
+    "ownership": "Firedoor-owned disposable local cluster only",
+    "operation": "authorization check against generated non-production secret identity"
+  },
+  "profiles": {
+    "baseline": "intentionally testable synthetic lab configuration; exact expectations to be specified before implementation",
+    "hardened": "restricted behavior expected only where independent health and enforcement controls pass"
+  },
+  "preflight": [
+    "verified cluster ownership",
+    "verified in-scope workload identity",
+    "healthy destination or API",
+    "bounded timeouts and cleanup",
+    "CNI verified where network-dependent"
+  ],
+  "safety": [
+    "no real credentials",
+    "no external targets",
+    "no mutation of Terraform-owned resources from Go",
+    "inconclusive on ambiguous observation"
+  ],
+  "implementation_milestone": "v0.4"
+}

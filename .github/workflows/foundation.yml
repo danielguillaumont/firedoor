@@ -1,0 +1,49 @@
+name: Foundation quality
+
+on:
+  push:
+    branches: [main, "feat/**"]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  go-quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: '1.27.x'
+          cache: true
+      - name: Go formatting check
+        run: |
+          test -z "$(gofmt -l cmd internal pkg)"
+      - name: Verify module dependencies
+        run: go mod verify
+      - name: Test + vet + build
+        run: |
+          go test ./...
+          go vet ./...
+          go build ./cmd/firedoor
+      - name: CLI help
+        run: go run ./cmd/firedoor --help
+
+  terraform-quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.17.1'
+      - name: Terraform fmt
+        run: terraform -chdir=infrastructure/terraform/testbed fmt -check -recursive
+      - name: Terraform init - local only
+        run: terraform -chdir=infrastructure/terraform/testbed init -backend=false -input=false
+      - name: Terraform validate
+        run: terraform -chdir=infrastructure/terraform/testbed validate
+
+# v0.0 intentionally has no kind cluster or Terraform apply.
+# v0.1+ will add independent CNI enforcement tests in scoped ephemeral clusters.
