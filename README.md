@@ -2,110 +2,126 @@
 
 **Contain the spread. Prove the boundary.**
 
-Firedoor is a **local-first Kubernetes security validation platform** in active development. It joins a Terraform-managed testbed, Calico-enforced Kubernetes NetworkPolicies, scoped Go-based cluster inspection, and evidence-backed security findings. The purpose is to distinguish **declared configuration**, **observed configuration**, and **behaviorally demonstrated boundaries** without treating those categories as interchangeable.
+Firedoor is a **local-first Kubernetes security inspection and controlled network-verification project** built with **Go, Terraform, Kubernetes, kind, and Calico**. Its purpose is to connect *declared configuration*, *observed configuration*, and *observed network behavior* while preserving uncertainty instead of claiming a system is secure solely because policy objects exist.
 
-> **Status: v0.1 merged; v0.2 Control Panel implemented and validated locally, with GitHub PR pending.** This is an educational/portfolio security project, **not a production security product**. It does not yet run live Go network probes, prove effective RBAC authorization, or certify the five FD scenario contracts.
+> **Development status:** v0.1 testbed and v0.2 Go configuration inspection are merged into `main` (v0.2 via PR #3). **v0.3 live probe and offline verification implementation is locally validated on `feat/v03-live-verification`; its final GitHub PR/CI/merge are pending.** Firedoor is an educational/portfolio project, **not** a production security product or a signed security attestation.
 
-**Engineering principle:** Terraform declares. Kubernetes enforces. Go inspects and validates. Firedoor aims to prove the boundary.
+**Architecture principle:** Terraform declares the synthetic testbed. Kubernetes/Calico implements its network configuration. Go inspects owned resources, collects bounded observations and evaluates saved evidence. *A match is evidence of observed behavior, not independent proof of policy causation.*
 
-## What you can run today
+## What works today
 
-| Command | Current capability | Important limitation |
-| --- | --- | --- |
-| `firedoor doctor` | Discover local binary availability | Doesn't verify cluster security |
-| `firedoor evidence verify` | Validate saved baseline/hardened PowerShell connectivity reports | No independent live packet-drop attribution |
-| `firedoor inspect` | Inventory observed resources in three Firedoor-owned namespaces | Configuration reads only; limited RBAC scope |
-| `firedoor audit --profile hardened` | Run six Go security-control evaluators across the three namespaces | 18 configuration findings, not enforcement or compliance proof |
+| Feature | Interface | What it does | Evidence boundary |
+| --- | --- | --- | --- |
+| Environment inspection | `firedoor doctor` | Reports available local tools | Not a security check |
+| v0.1 before/after comparison | `firedoor evidence verify` | Compares historical saved baseline/hardened PowerShell evidence | Checks record consistency, not live traffic |
+| v0.2 resource inventory | `firedoor inspect --format human` | Scopes `kubectl` reads to the three owned namespaces | Configuration snapshot, not enforcement proof |
+| v0.2 control audit | `firedoor audit --profile hardened` | Six Go control findings per namespace (18 total) | Effective RBAC and full network enforcement not established |
+| v0.3 live observation collection | `scripts/v03/Invoke-FiredoorV03LabProbe.ps1 -Profile hardened -ConfirmOwnedLab` | Opt-in, guarded Go network probes inside the dedicated kind testbed | Development harness; not a general-purpose scanner |
+| **v0.3 offline verification** | **`firedoor verify --profile hardened --input <local-observations.json>`** | Validates existing Go probe evidence and compares it to six fixed route expectations | Offline only; does not launch probes or verify Terraform state |
 
-### v0.1 — Kubernetes security testbed
+### v0.1 — Disposable Terraform-managed Kubernetes testbed
 
-A dedicated local `kind` cluster (`firedoor-local`) with Calico, three synthetic HTTP workloads (`edge`, `app`, `data`), and **14 Terraform-managed Kubernetes resources**. In the captured local test, baseline traffic connected on all **6/6** paths. The hardened profile changed **two ingress NetworkPolicies** in place; **4/6** paths continued connecting and the other two were unreachable on two attempts each. The read-only Go verifier assessed the stored PowerShell records as `evidence_consistent`.
+One dedicated local `kind` cluster (`firedoor-local`), Calico networking, and three synthetic HTTP workloads (`edge`, `app`, `data`). A single Terraform state manages **14 Kubernetes resources**. The initial local baseline observed **six reachable routes**. The independently applied `hardened` profile updated two NetworkPolicies in place, after which **four routes connected and two were unreachable** during bounded local tests. The original Go `evidence verify` command checked saved records for consistency, not CNI-level packet-drop attribution.
 
-The evidence is from a controlled local environment, not an independently signed proof of CNI packet attribution. See [v0.1 validation](docs/v01-validation-summary.md).
+See [v0.1 validation](docs/v01-validation-summary.md).
 
-### v0.2 — Go configuration inspection and audit
+### v0.2 — Read-only Go configuration inspection
 
-`firedoor inspect` reads the three explicitly owned namespaces, including the relevant Deployment, Pod labels, ServiceAccount, ingress NetworkPolicies, namespaced Roles, and RoleBindings. It refuses an unexpected `kubectl` context, cluster, node, or namespace ownership labels. The adapter invokes a small allowlist of **read-only `kubectl get` commands** instead of using `client-go` at this milestone. It does **not** independently verify effective cluster-wide RBAC permissions.
+`firedoor inspect` collects selected observed Kubernetes resources in `firedoor-edge`, `firedoor-app`, and `firedoor-data`; `firedoor audit` evaluates six explicit configuration controls in each zone. The validated local hardened audit produced **18 findings: 14 PASS, 1 FAIL, 3 UNKNOWN**.
 
-`firedoor audit` runs **six configuration controls per namespace** (18 findings):
+- **FAIL:** `CTRL-NET-001` found no ingress-isolating NetworkPolicy selecting the Edge workload Pod. This known finding is retained, not edited away.
+- **UNKNOWN:** effective RBAC in each of the three namespaces was not fully observed. Missing namespaced RoleBindings do **not** establish absence of ClusterRoleBindings or effective permissions.
+- **Scope:** the existing isolation check concerns selected **ingress** policy behavior, not a full default-deny, egress-policy, or enforcement guarantee. The assessed pass percentage is not a security or compliance score.
 
-1. Dedicated workload ServiceAccount.
-2. Disable unnecessary ServiceAccount token automount.
-3. Least-privilege Kubernetes RBAC — **unknown** when effective grants are not fully inspected.
-4. Ingress isolation through a selecting NetworkPolicy with bounded allowed peers — **not an egress policy or full default-deny/enforcement proof**.
-5. Explicit non-root container execution.
-6. Disabled container privilege escalation.
+The `--profile` argument on `firedoor audit` is operator supplied and is **not** independently checked against Terraform by the CLI. See [v0.2 validation](docs/v02-validation-summary.md).
 
-The first live audit on **November 5, 2026 UTC** reported:
+### v0.3 — Controlled Go live verification (locally validated)
 
-| Live result | Count | Meaning |
-| --- | ---: | --- |
-| `PASS` | 14 | Inspected fields met the limited control conditions |
-| `FAIL` | 1 | No ingress-isolating policy selected the Edge workload Pod |
-| `UNKNOWN` | 3 | Effective RBAC permissions not fully observed in any zone |
-| **Total** | **18** | Three zones × six controls |
+The v0.3 implementation defines an **immutable six-route test matrix** and an opt-in Go development harness that checks cluster/context identity, namespace and Pod ownership, Pod readiness, source and destination identity, private destination Pod IP and fixed HTTP/TCP port `8080` before its bounded attempts. It records every attempt and treats execution errors, stale targets, malformed responses and ambiguous outcomes as **inconclusive**, not as successful blocks.
 
-The report distinguishes `assessment_coverage_percent` (**83.3%**) and `assessed_pass_rate_percent` (**93.3%**). **Neither is a global security or compliance score.** It explicitly reports `findings_require_review`, and marks the CLI `--profile` argument as **operator supplied and not independently verified**. Local raw JSON is ignored by Git; only the sanitized validation summary is intended for the repository. See [v0.2 validation summary](docs/v02-validation-summary.md).
+The public **`firedoor verify` command is offline**: it validates a previously saved Go live-observation JSON file, checks its schema/route identities/attempts, and emits `match`, `mismatch` or `inconclusive` for each route with human-readable or JSON output. It never contacts Kubernetes itself.
 
-## Windows PowerShell — read-only walkthrough
+A local run on **November 5, 2026 UTC**, after the dedicated testbed separately reported Terraform profile `hardened`, observed the following:
 
-Prerequisites: Go 1.27.x, Git, PowerShell, Docker Desktop, kind, `kubectl`, Terraform and the dedicated **owned** Firedoor kind testbed. The public repository does not include a running cluster, Terraform state, or captured local evidence.
+| Direction | Expected under hardened | Observed | Offline verification |
+| --- | --- | --- | --- |
+| Edge → App | Reachable | Reachable | Match |
+| App → Data | Reachable | Reachable | Match |
+| Edge → Data | Unreachable | Unreachable (two attempts) | Match |
+| Data → App | Unreachable | Unreachable (two attempts) | Match |
+| App → Edge | Reachable | Reachable | Match |
+| Data → Edge | Reachable | Reachable | Match |
+
+**Result:** `matched` — **6 match, 0 mismatch, 0 inconclusive**. This is evidence that the recorded HTTP behavior matched the controlled test plan at collection time, **not** independent proof that Calico or a specific NetworkPolicy caused a failed connection, and **not** certification of scenario FD-004 or all FD-001–FD-005 contracts. The saved JSON is not cryptographically authenticated. A later offline run cannot attest to the currently active Terraform profile.
+
+See [v0.3 local validation summary](docs/v03-validation-summary.md) and [safety boundaries](docs/v03-safety-boundaries.md).
+
+## Windows PowerShell quickstart
+
+Prerequisites for source quality: Go, Git, PowerShell and Terraform. A running cluster is **not** needed to run unit tests or the offline `verify` command if compatible saved JSON is already present. A live probe requires the explicitly owned `kind` testbed, Docker Desktop, `kubectl`, Calico and a verified Terraform profile.
 
 ```powershell
 cd "$HOME\Projects\firedoor"
+
 go test ./...
 go vet ./...
 go run ./cmd/firedoor --help
 
-# Requires the deliberately named, local, Firedoor-owned kind cluster:
-kubectl config current-context
-kind get clusters
-go run ./cmd/firedoor inspect --format human
+# Run the public offline verifier against previously captured, Git-ignored local observations:
+go run ./cmd/firedoor verify `
+  --profile hardened `
+  --input .\docs\evidence\local\v03-slice2-hardened-live-observations.json `
+  --format human
+
+# Strict CI-style behavior: nonzero for mismatched or inconclusive valid evidence.
+go run ./cmd/firedoor verify `
+  --profile hardened `
+  --input .\docs\evidence\local\v03-slice2-hardened-live-observations.json `
+  --format json --require-match
 ```
 
-Before auditing, check the local Terraform output (the Go audit itself does **not** verify it):
+`firedoor verify` and `firedoor evidence verify` are different commands with different evidence schemas. By default, a **valid** mismatch or inconclusive report still exits 0, so callers must inspect the `status` field; use `--require-match` when a non-match must fail a CI job. Malformed or inconsistent input is rejected with an error regardless.
+
+To run the **source-only** v0.3 closeout checks (no kind, `kubectl`, HTTP probes, Terraform plan/apply, or evidence file modification):
 
 ```powershell
-$tfDir = (Resolve-Path '.\infrastructure\terraform\testbed').Path
-Push-Location $tfDir
-try { terraform output -raw active_profile } finally { Pop-Location }
-
-# Only when the reported active profile is hardened:
-go run ./cmd/firedoor audit --profile hardened --format human
-go run ./cmd/firedoor audit --profile hardened --format json
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\v03\Test-FiredoorV03Closeout.ps1
 ```
 
-The v0.2 closeout script performs extra local checks without applying Terraform or changing the cluster:
+To recheck the **already captured** local evidence with the supported CLI (writes only a Git-ignored report):
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\v02\Test-FiredoorV02Closeout.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass `
+  -File .\scripts\v03\Confirm-FiredoorV03CLI.ps1 -Profile hardened
 ```
 
-The v0.1 evidence verifier requires local, Git-ignored baseline/hardened JSON generated by the PowerShell network matrix:
+A new live probe is **optional** and must never be launched from a general production cluster or substituted with third-party targets. Only if you own the dedicated local Firedoor lab and have independently confirmed its profile:
 
 ```powershell
-go run ./cmd/firedoor evidence verify --format human
+powershell.exe -NoProfile -ExecutionPolicy Bypass `
+  -File .\scripts\v03\Invoke-FiredoorV03LabProbe.ps1 `
+  -Profile hardened -ConfirmOwnedLab
 ```
 
-**Do not** execute historical saved Terraform plans, run `terraform apply`/`destroy`, or modify the cluster as part of a read-only audit. The testbed's deliberate missing Edge isolation is a documented finding, not something to conceal just to generate an all-green report.
+The public repository does not ship live cluster state, Terraform state, kubeconfig, or raw environment-specific JSON. `docs/evidence/local/` remains Git-ignored. Do not commit saved evidence, binary builds, `.tfstate`, `.tfplan`, or credentials. Do not run stale `terraform apply` or `destroy` as part of verification.
 
-## Repository structure
+## Repository map
 
-| Area | Responsibility |
+| Area | Role |
 | --- | --- |
-| `cmd/firedoor/`, `internal/cli/` | Go/Cobra CLI: doctor, evidence, inspect, audit |
-| `internal/kubeinspect/` | Scoped allowlisted Kubernetes configuration collector |
-| `internal/controls/`, `internal/audit/` | Pure Go control evaluators, findings, JSON/human reports |
-| `internal/evidence/`, `scripts/v01/` | Read-only saved-evidence verification and bounded PowerShell network test harness |
-| `infrastructure/bootstrap/` | Owned kind/Calico setup and smoke-test resources |
-| `infrastructure/terraform/` | Reusable modules and single-state three-zone testbed |
-| `scenarios/FD-001`–`FD-005` | Future scenario proof contracts; not yet certified |
-| `docs/`, `.github/workflows/` | Architecture, ADRs, progress, quality gates, and validation notes |
+| `cmd/firedoor/`, `internal/cli/` | Go/Cobra CLI: doctor, evidence, inspect, audit, verify |
+| `internal/kubeinspect/` | Scoped Kubernetes configuration snapshot |
+| `internal/controls/`, `internal/audit/` | Configuration controls, audit verdicts and reports |
+| `internal/liveverify/` | Fixed network plans, owned-Pod discovery, bounded Go executor, evidence validation and offline verdicts |
+| `scripts/v01/`, `scripts/v03/` | Original bounded connectivity checks; opt-in Go live-probe harness; offline confirmation and quality gates |
+| `infrastructure/bootstrap/`, `infrastructure/terraform/` | Dedicated kind/Calico setup and Terraform testbed |
+| `scenarios/FD-001`–`FD-005` | Future security scenario contracts, **not yet certified** |
+| `docs/`, `.github/workflows/` | ADRs, reproducibility notes, progress, sanitized summaries and source CI |
 
-## Safety boundaries and next milestones
+## Limitations and roadmap
 
-Go does not silently mutate Terraform-managed objects. v0.2 is **configuration inspection**, not a live offensive scanner, Kubernetes admission controller, Terraform drift engine, or continuous monitor. It currently runs with the operator's local `kubectl` credentials; code-level read-only guards are not a substitute for a separate least-privilege Kubernetes identity. GitHub Actions validates source quality and unit tests; it does not reproduce a live kind/Calico audit in CI yet.
+This is a **single controlled workstation testbed**, not a general-purpose security scanner, production admission controller or continuous monitoring system. The probe harness uses the operator's Kubernetes credentials and fixed in-Pod HTTP tooling. Guardrails mitigate accidental out-of-scope execution but are not a substitute for independently enforced least-privilege permissions. GitHub Actions executes source/build validation, **not** a live Calico policy-causality assessment.
 
-`v0.0` foundation → `v0.1` testbed → **`v0.2` configuration controls** → `v0.3` first FD-004 live Go proof → `v0.4` all five scenarios → `v0.5` evidence → `v0.6` console → `v0.7` Containment Map → `v0.8` proofs → `v0.9` CI regression → `v1.0` flagship.
+`v0.0` foundation → `v0.1` testbed → `v0.2` configuration controls → **`v0.3` live observations and offline verification (local validation complete; merge pending)** → `v0.4` expanded scenarios → `v0.5` evidence → `v0.6` console → `v0.7` Containment Map → `v0.8` proofs → `v0.9` CI regression → `v1.0` flagship.
 
-Read [architecture](docs/architecture.md), [ADRs](docs/adr), [scenarios](scenarios), [progress](docs/progress.md), and the [Master Build Plan v1.1](docs/planning/Firedoor_Master_Build_Plan_v1.1.pdf). Synthetic/local workloads only, no production clusters or third-party targets. See [SECURITY.md](SECURITY.md). MIT licensed.
+See [architecture](docs/architecture.md), [ADRs](docs/adr), [progress](docs/progress.md), [scenario specifications](scenarios), [Master Build Plan v1.1](docs/planning/Firedoor_Master_Build_Plan_v1.1.pdf) and [SECURITY.md](SECURITY.md). MIT licensed.
