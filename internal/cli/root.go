@@ -19,7 +19,7 @@ func NewRootCommand() *cobra.Command {
 	}
 	root.SetVersionTemplate("{{.Version}}\n")
 	root.Version = Version
-	root.AddCommand(newVersionCommand(), newDoctorCommand(), newEvidenceCommand(), newInspectCommand(), newAuditCommand(), newVerifyCommand(), newAttributionCommand(), newProofCommand())
+	root.AddCommand(newVersionCommand(), newDoctorCommand(), newEvidenceCommand(), newInspectCommand(), newAuditCommand(), newVerifyCommand(), newAttributionCommand(), newProofCommand(), newConsoleAPICommand())
 	return root
 }
 
