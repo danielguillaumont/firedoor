@@ -1,0 +1,20 @@
+# Only role=allowed can connect to the target on TCP/8080 within the test namespace.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: target-allow-only
+  namespace: firedoor-netcheck
+spec:
+  podSelector:
+    matchLabels:
+      app: firedoor-netcheck-target
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              role: allowed
+      ports:
+        - protocol: TCP
+          port: 8080
