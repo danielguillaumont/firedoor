@@ -13,13 +13,13 @@ func NewRootCommand() *cobra.Command {
 	root := &cobra.Command{
 		Use:           "firedoor",
 		Short:         "Evidence-first Kubernetes security validation (in development)",
-		Long:          "Firedoor links Terraform security intent, Kubernetes observations and bounded validation. The v0.1 evidence command checks previously captured local records; live scenario proofs are future work.",
+		Long:          "Firedoor links Terraform security intent, Kubernetes observations and bounded validation. v0.1 verifies previously captured network evidence; v0.2 audits owned Kubernetes configuration. Live Go network probes and enforcement proofs remain future work.",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
 	root.SetVersionTemplate("{{.Version}}\n")
 	root.Version = Version
-	root.AddCommand(newVersionCommand(), newDoctorCommand(), newEvidenceCommand())
+	root.AddCommand(newVersionCommand(), newDoctorCommand(), newEvidenceCommand(), newInspectCommand(), newAuditCommand())
 	return root
 }
 
