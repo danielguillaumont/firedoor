@@ -125,3 +125,34 @@ This is a **single controlled workstation testbed**, not a general-purpose secur
 `v0.0` foundation → `v0.1` testbed → `v0.2` configuration controls → **`v0.3` live observations and offline verification (local validation complete; merge pending)** → `v0.4` expanded scenarios → `v0.5` evidence → `v0.6` console → `v0.7` Containment Map → `v0.8` proofs → `v0.9` CI regression → `v1.0` flagship.
 
 See [architecture](docs/architecture.md), [ADRs](docs/adr), [progress](docs/progress.md), [scenario specifications](scenarios), [Master Build Plan v1.1](docs/planning/Firedoor_Master_Build_Plan_v1.1.pdf) and [SECURITY.md](SECURITY.md). MIT licensed.
+
+## v0.4 - Controlled Kubernetes policy attribution
+
+Firedoor now performs guarded A/B/A experiments in an owned
+Kubernetes kind lab to investigate policy-associated connectivity.
+
+Two approved network paths are tested:
+- Edge to Data
+- Data to App
+
+Each experiment observes blocked traffic, creates an exact scoped
+temporary allow policy, verifies connectivity, removes that policy
+using a Kubernetes UID precondition, and checks restored isolation.
+
+The implementation includes preflight drift detection, explicit
+operator approval, bounded probes, a durable recovery journal,
+failure-injection tests, and independent cleanup verification.
+
+`firedoor attribution` validates saved experiment reports and
+recovery journals offline, with human-readable or JSON output.
+It does not modify Kubernetes resources.
+
+For local validation:
+
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\v04\Show-FiredoorV04Attribution.ps1
+
+See `docs/v04-attribution-reporting-slice4.md` for the command
+reference and evidence limitations.
+
+Scope: controlled policy-effect evidence in an owned test lab,
+not production enforcement proof or compliance certification.
