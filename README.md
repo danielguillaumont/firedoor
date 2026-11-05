@@ -4,9 +4,28 @@
 
 Firedoor is a **local-first Kubernetes security inspection and controlled network-verification project** built with **Go, Terraform, Kubernetes, kind, and Calico**. Its purpose is to connect *declared configuration*, *observed configuration*, and *observed network behavior* while preserving uncertainty instead of claiming a system is secure solely because policy objects exist.
 
-> **Development status:** v0.1 testbed and v0.2 Go configuration inspection are merged into `main` (v0.2 via PR #3). **v0.3 live probe and offline verification implementation is locally validated on `feat/v03-live-verification`; its final GitHub PR/CI/merge are pending.** Firedoor is an educational/portfolio project, **not** a production security product or a signed security attestation.
+> **Development status (November 5, 2026):** v0.1-v0.4 are merged into `main` (v0.4 via PR #5); v0.5 Proof Lens is locally validated on `feat/v05-evidence`, with PR, GitHub CI and merge still pending. Firedoor is a local educational/portfolio lab, not a production security product or signed attestation.
 
 **Architecture principle:** Terraform declares the synthetic testbed. Kubernetes/Calico implements its network configuration. Go inspects owned resources, collects bounded observations and evaluates saved evidence. *A match is evidence of observed behavior, not independent proof of policy causation.*
+
+<!-- FIREDOOR_V05_README_BEGIN -->
+## What is new: v0.4 attribution and v0.5 Proof Lens
+
+**v0.4 — Historical A/B/A witnesses.** `firedoor attribution` validates two locally saved HTTP reachability experiments and their recovery journals. The observed sequence for `edge-to-data` and `data-to-app` was **unreachable → reachable → unreachable** after temporary witness policies; restoration and lock-release checks passed. This is historical, application-level evidence, not packet-level causation.
+
+**v0.5 — Proof Lens.** A Go/Cobra evidence workflow combines a sanitized, speculative Terraform plan receipt (SQLite v2), a fresh consent-gated **read-only** Kubernetes inventory, and earlier v0.4 witnesses into a human-readable timeline. Receipt/source fingerprints and record consistency are checked; raw state and diagnostics are not published. The output deliberately reports **INCONCLUSIVE** and **historical context only — not a causal proof chain**.
+
+| Command | Behavior |
+| --- | --- |
+| `go run ./cmd/firedoor attribution --help` | Existing historical v0.4 verification entry point; no live Kubernetes access |
+| `go run ./cmd/firedoor proof` | Inert JSON preview; no local evidence, SQLite or Kubernetes access |
+| `go run ./cmd/firedoor proof report --help` | Describes explicit consent, receipt and output flags |
+| `go run ./cmd/firedoor proof report --root . --receipt-id <LOCAL_RECEIPT_ID> --consent <EXACT_CONSENT> --format markdown` | Read-only report; requires owned lab and local evidence |
+
+The optional `--export-markdown` flag only creates **one fixed Git-ignored file** (`docs/evidence/local/v05-proof-lens-report.md`), refusing overwrite. A clean clone does **not** contain local SQLite, Terraform state or historical reports. Real read-only reporting needs the exact owned testbed; Terraform planning and network probes are not automatic. **Never commit private evidence.**
+
+For verified local results, safety limits, reproducible test commands and architecture, see **[v0.5 validation and release review](docs/v05-validation-summary.md)**. Incremental implementation notes live under `docs/v05-proof-lens-slice*.md`. The v0.5 PR/merge is pending.
+<!-- FIREDOOR_V05_README_END -->
 
 ## What works today
 
