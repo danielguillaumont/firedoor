@@ -1,0 +1,2 @@
+# Go tooling requires LF files on all operating systems.
+*.go text eol=lf
