@@ -1,9 +1,27 @@
 # Firedoor build progress
 
-## 2026-11-05 UTC — v0.2 Control Panel (local validation completed; PR pending)
+## 2026-11-05 UTC — v0.3 bounded Go network verification (local validation complete; PR pending)
+
+**Branch:** `feat/v03-live-verification` (from `5a6bda0`). **Status:** Slices 1–4 and the public CLI are validated locally; final v0.3 source closeout and GitHub commit/CI/PR/merge still pending. No v0.3 merge is claimed.
+
+- **Slice 1:** Fixed six-route, profile-specific Go plan with strict owned-lab guards, source/destination allowlist, timeout and attempt bounds. Unit and negative tests passed.
+- **Slice 2:** Go runtime discovery and guarded HTTP execution from the three existing owned Pods, using immutable private Pod IPs on TCP/8080 and exact destination response bodies. The explicit opt-in local test independently checked Terraform `active_profile = hardened`. Live observations: **4 reachable, 2 unreachable**; the two expected unreachable paths each had **two attempts**. Inconclusive errors were not misclassified as blocking.
+- **Slice 3:** Offline Go verification engine validates identity, sequence, attempts and observation consistency and emits `match`/`mismatch`/`inconclusive`. The actual saved hardened JSON evaluated **6 match, 0 mismatch, 0 inconclusive**. Contradictory or malformed evidence fails closed.
+- **Slice 4:** New top-level `firedoor verify` Cobra command reads local JSON and outputs human/JSON with schema `firedoor.v03.verification.v1`; `--require-match` fails CI on an evaluated mismatch/inconclusive. The first CLI test needed a Cobra error-text expectation correction; the subsequent quality-gate script needed to tolerate a deliberately rejected unsupported `production` profile. After these two fixes, all new and existing Go tests, vet, module verify, Windows build, and offline public CLI report passed.
+- **Evidence:** Files `docs/evidence/local/v03-slice2-hardened-live-observations.json`, `v03-slice3-hardened-verification.json`, and `v03-slice4-hardened-cli-verification.json` were confirmed Git-ignored. Do not stage or force-add them.
+- **Measured observation window:** `2026-11-05T03:21:55Z` to `03:22:16Z`; result is a bounded snapshot, not continuous monitoring or independent policy-causality evidence.
+
+**Interpretation:** Observed unreachability is not independently attributable to Calico or a given NetworkPolicy. The v0.2 Edge ingress isolation failure and three unknown effective-RBAC findings remain. No FD-001–FD-005 scenario certification or production-ready compliance claim is made. The offline CLI cannot attest to Terraform state or JSON authenticity.
+
+**Next:** Run Slice 5 source-only quality checks and offline evidence confirmation, review exact Git staging, commit/push the feature branch, create and review PR, merge only after CI passes, then sync local main. See [v0.3 validation summary](v03-validation-summary.md).
+
+---
+
+
+## 2026-11-05 UTC — v0.2 Control Panel (merged via PR #3)
 
 **Branch:** `feat/v02-controls`
-**Status:** Slices 1–4 validated on Windows against the dedicated local cluster. Slice 5 regression and GitHub PR/CI/merge remain pending. No v0.2 commit or PR is claimed by this entry.
+**Historical status at initial entry:** Slices 1–4 validated locally. **Closure update:** Slice 5 passed, PR #3 passed four GitHub checks and was merged as `5a6bda0` into `main`; the local merge was synchronized and Go/Terraform checks passed before starting v0.3.
 
 ### Implemented and observed
 
@@ -19,7 +37,7 @@
 
 This audits **observed resource configuration**, not effective RBAC, runtime admission behavior, all-network default-deny, packet filtering, Terraform drift or FD-001–FD-005 validation. App and Data have selecting bounded **ingress** policies, but v0.2 does not prove egress isolation. The Edge ingress finding is deliberately retained and must not be cleared by weakening or silently changing the environment. Source-level read-only commands are still executed using the operator's existing `kubectl` credentials.
 
-### Remaining v0.2 closeout gate
+### Historical v0.2 closeout checklist (subsequently completed)
 
 1. Run `Test-FiredoorV02Closeout.ps1`: Go format/build/test/vet, Terraform validation, and CLI checks (no apply).
 2. Run `Confirm-FiredoorV02Audit.ps1`: independently confirm dedicated cluster/context and Terraform profile, evaluate live JSON, validate **18/14/1/3**, and write only Git-ignored local evidence.
