@@ -1,6 +1,6 @@
 # Firedoor v0.6 — Slice 6A: localhost-only read-only API foundation
 
-**Branch:** `feat/v06-console`  
+**Branch:** `feat/v06-console`
 **Scope:** source-only API contract and optional loopback HTTP server. No new state, evidence, Terraform execution, Kubernetes client, traffic probe, or frontend yet.
 
 ## Why this is intentionally small
