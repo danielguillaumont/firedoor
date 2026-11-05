@@ -2,69 +2,76 @@
 
 **Contain the spread. Prove the boundary.**
 
-Firedoor is a **local-first Kubernetes security validation platform** under development. The goal is to compare Terraform-declared security controls with live Kubernetes configuration and bounded, reproducible security checks. It will distinguish configured, observed, and *behaviourally verified* controls.
+**Firedoor** is a local-first Kubernetes security validation platform in active development. It connects **Terraform-declared security intent**, **Calico-enforced Kubernetes NetworkPolicies**, and **Go-based evidence consistency checks**. Its goal is to distinguish *configured*, *observed*, and *behaviorally verified* controls instead of declaring a system secure just because a policy exists.
 
-> **Status: v0.0 Foundation in progress.** This repository currently contains the Go/Cobra CLI shell, environment discovery, initial contracts, Terraform scaffolding and quality checks. **It does not currently validate Kubernetes security controls or produce containment proofs.**
+> **Current development status: v0.1 testbed and evidence foundation implemented locally; feature branch awaiting final regression, GitHub PR, and merge.** This is **not** a production security product. v0.1 does not yet prove the full FD-001–FD-005 scenario contracts, offer a graphical console, or run independent live Kubernetes probes from Go.
 
-**Technical line:** Terraform declares. Kubernetes enforces. Go verifies. Firedoor proves.
+**Engineering contract:** Terraform declares. Kubernetes enforces. Go evaluates recorded evidence. Firedoor aims to prove the boundary.
 
-## Intended workflow (future milestones)
+## What v0.1 demonstrates
 
-1. Provision an owned, disposable kind cluster (v0.1).
-2. Apply baseline controls from one Terraform state (v0.1).
-3. Test a bounded scenario using Go and collect live evidence (v0.3).
-4. Review and apply hardened Terraform profile, then retest (v0.3).
-5. Export an evidence-backed Boundary / Infrastructure Proof (v0.8).
+A disposable, explicitly named `kind` cluster (`firedoor-local`) runs Calico networking and three synthetic HTTP workloads in Terraform-managed namespaces: `firedoor-edge`, `firedoor-app`, and `firedoor-data`. Terraform owns **14 Kubernetes resources** (3 namespaces, 3 ServiceAccounts, 3 Deployments, 3 Services, 2 ingress NetworkPolicies). The same Terraform state is used for both `baseline` and `hardened` profiles.
 
-No production clusters, third-party targets or real credentials are in scope.
+The workstation validation on **November 4, 2026** recorded these observations against the local cluster:
 
-## Windows PowerShell: quick start (v0.0)
+| Traffic path | Baseline | Hardened |
+| --- | --- | --- |
+| Edge → App | Connected | Connected |
+| App → Data | Connected | Connected |
+| Edge → Data | Connected | Unreachable twice |
+| Data → App | Connected | Unreachable twice |
+| App → Edge | Connected | Connected |
+| Data → Edge | Connected | Connected |
 
-Prerequisites: Git, Go 1.27.x, Terraform 1.17.x. Docker Desktop, kubectl, kind and Node.js are discovered by `doctor` but are not needed for the foundation unit tests. Install tools from their official vendor sources.
+The hardened apply modified **only two NetworkPolicies** (`0 added, 2 changed, 0 destroyed`); all three Deployments remained available. Local PowerShell probes collected the connectivity observations. The Go/Cobra `evidence verify` command then checked the saved before/after JSON reports for schema, identity, chronology, completeness, targets, and expected outcomes, returning `evidence_consistent`.
+
+**Evidence boundary:** The Go tool verifies **record consistency**, not independent live packet filtering or evidence authenticity. An unreachable connection alone is not definitive attribution to NetworkPolicy; the smoke test and profile probes include working positive controls, but independent instrumentation and full FD scenario proofs are later milestones. The raw environment-specific evidence files are intentionally **not committed**. See [v0.1 validation summary](docs/v01-validation-summary.md) and [Go evidence verification scope](docs/v01-go-evidence-slice5.md).
+
+## Repository layout
+
+| Area | Role |
+| --- | --- |
+| `cmd/firedoor/`, `internal/cli/`, `internal/evidence/` | Go/Cobra CLI and read-only evidence verification |
+| `infrastructure/bootstrap/`, `scripts/v01/` | Dedicated kind/Calico bootstrap and bounded, explicit PowerShell validation |
+| `infrastructure/terraform/testbed/` | Single-state, deliberately owned Kubernetes testbed |
+| `infrastructure/terraform/modules/` | Reusable workload and ingress-boundary modules |
+| `scenarios/FD-001`–`FD-005` | Future scenario contracts, **not yet certified** |
+| `docs/` | Architecture, ADRs, build notes, validation scope, and progress |
+
+## Reproduce the read-only Go checks on Windows
+
+Prerequisites: Go 1.27.x and PowerShell; `go mod download` may require network access. These commands do not modify Kubernetes or Terraform:
 
 ```powershell
 cd "$HOME\Projects\firedoor"
-go version
-terraform version
-go mod tidy
+
 go test ./...
 go vet ./...
+go mod verify
 go run ./cmd/firedoor --help
-go run ./cmd/firedoor version
-go run ./cmd/firedoor doctor --format json
-terraform -chdir=infrastructure/terraform/testbed fmt -check -recursive
-terraform -chdir=infrastructure/terraform/testbed init -backend=false -input=false
-terraform -chdir=infrastructure/terraform/testbed validate
 ```
 
-`go mod tidy` will generate `go.sum`; Terraform init will generate `.terraform.lock.hcl`. **Commit both lockfiles.** Neither command deploys a cluster. The first `terraform init` downloads the provider; it requires internet. `doctor` reports binary availability, not validated Kubernetes readiness.
-
-For a repeatable check after installing prerequisites:
+The evidence verifier additionally requires **two local JSON files captured by the v0.1 PowerShell connectivity harness** at `docs/evidence/local/v01-terraform-baseline-connectivity.json` and `docs/evidence/local/v01-terraform-hardened-connectivity.json`. They are ignored by Git; a fresh clone will not have them.
 
 ```powershell
-.\scripts\Test-Foundation.ps1
+go run ./cmd/firedoor evidence verify --format human
+go run ./cmd/firedoor evidence verify --format json
 ```
 
-## Project boundaries
+A passing result reports `Verdict: evidence_consistent`; it is not a claim of continuous monitoring or a signed audit artifact. For the scoped cluster lifecycle, testbed plans and profile transition, read [the v0.1 validation summary](docs/v01-validation-summary.md) and the documentation under `docs/v01-*.md`. **Never apply a Terraform plan or mutate a cluster without reading the ownership guards and reviewing the plan.**
 
-| Owner | Responsibility |
-|---|---|
-| kind / bootstrap | Create and delete a dedicated local cluster, install a reviewed CNI |
-| Terraform | Own namespaces, long-lived services, identities, NetworkPolicies, RBAC and security posture |
-| Go | Read cluster state, create only bounded disposable validation probes, evaluate / persist evidence |
-| React console | Read persisted Go API data; **never** manufacture verdicts |
-| GitHub Actions | Run local quality checks and, later, isolated ephemeral tests with cleanup |
+## Boundaries and roadmap
 
-The Go process must never silently mutate Terraform-managed resources. A blocked connection by itself is **not** proof of containment; destination health, CNI enforcement and independent controls must be verified.
+- **Scope:** Synthetic workloads in an owned local kind environment. No external targets, production workloads, or credentials.
+- **Terraform:** Owns three namespaces and their long-lived Kubernetes resources. It does **not** own the kind control plane, Calico bootstrap, or disposable smoke-test namespace.
+- **Calico:** Installed by a reviewed operator/bootstrap step. v0.1 has live allow/deny validation; it does **not** provide comprehensive egress isolation.
+- **Go:** Validates saved PowerShell evidence. Direct, bounded Go-operated Kubernetes tests are planned for later milestones.
+- **CI:** Existing GitHub workflow covers Go and Terraform source quality. The full local kind/Calico behavioral matrix is **not yet CI automated**.
 
-## Milestones
+Milestones: **v0.0** foundation → **v0.1** reproducible testbed and observed evidence → **v0.2** control foundations → **v0.3** first FD-004 live proof → **v0.4** full scenario matrix → **v0.5** structured evidence → **v0.6** console → **v0.7** Containment Map → **v0.8** proofs → **v0.9** CI regression → **v1.0** flagship.
 
-`v0.0` foundation → `v0.1` testbed → `v0.2` controls → `v0.3` first FD-004 proof → `v0.4` all five scenarios → `v0.5` evidence → `v0.6` console → `v0.7` Containment Map → `v0.8` proofs → `v0.9` CI regression → `v1.0` flagship.
+For detailed context, see [architecture](docs/architecture.md), [ADRs](docs/adr), [scenarios](scenarios), [progress](docs/progress.md), and [Master Build Plan v1.1](docs/planning/Firedoor_Master_Build_Plan_v1.1.pdf).
 
-The original [Master Build Plan v1.1](docs/planning/Firedoor_Master_Build_Plan_v1.1.pdf) is the planning baseline. Read [architecture](docs/architecture.md), [security](SECURITY.md), [ADRs](docs/adr), [scenarios](scenarios), and [progress log](docs/progress.md).
+## Security and license
 
-## Scope and license
-
-Synthetic data only. No vulnerability scanning outside a locally owned testbed. This is a developing educational and portfolio project, not a production protection guarantee. See [SECURITY.md](SECURITY.md).
-
-License: MIT.
+Development/portfolio software only; **do not** use v0.1 as a production protection guarantee. Report issues via [SECURITY.md](SECURITY.md). MIT licensed.
