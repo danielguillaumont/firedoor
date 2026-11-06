@@ -66,5 +66,5 @@ export const loadApprovedProofSummary = (signal: AbortSignal) => getJSON(endpoin
 export const loadControlCatalog = (signal: AbortSignal) => getJSON(endpoints.controls, parseControlCatalog, signal);
 export const loadHistoricalEnvironment = (signal: AbortSignal) => getJSON(endpoints.environment, parseHistoricalEnvironment, signal);
 
-// No automatic access: the future History UI will request only after explicit user action.
+// No automatic access: the History page requests only after explicit user action.
 export const loadHistoricalActivity = (signal: AbortSignal) => getJSON(endpoints.history, parseHistoricalActivity, signal);

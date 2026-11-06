@@ -20,6 +20,8 @@ describe('console UI evidence boundary', () => {
     expect(html).toContain('Contract preview');
     expect(html).toContain('not a security assessment');
     expect(html).toContain('Connecting to API');
+    expect(html).toContain('History');
+    expect(html).not.toContain('Load historical activity');
     expect(html).toContain('not cluster health');
     expect(html).not.toContain('3 ready pods');
   });
