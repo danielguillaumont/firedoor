@@ -1,4 +1,4 @@
-import { parseCapabilities, parseHealth, parseScenarios, parseProofSummary, parseControlCatalog, parseHistoricalEnvironment } from './contracts';
+import { parseCapabilities, parseHealth, parseScenarios, parseProofSummary, parseControlCatalog, parseHistoricalEnvironment, parseHistoricalActivity } from './contracts';
 
 export const endpoints = {
   health: '/api/v1/health',
@@ -7,6 +7,7 @@ export const endpoints = {
   proof: '/api/v1/proof-summary',
   controls: '/api/v1/control-catalog',
   environment: '/api/v1/environment-snapshot',
+  history: '/api/v1/historical-activity',
 } as const;
 
 // Bound the opt-in proof response even when the server sends chunked content
@@ -50,7 +51,7 @@ export async function getJSON<T>(path: (typeof endpoints)[keyof typeof endpoints
   if (!response.ok) throw new Error(`API returned HTTP ${response.status}`);
   const contentType = response.headers.get('Content-Type') ?? '';
   if (!contentType.toLowerCase().includes('application/json')) throw new Error('API did not return JSON');
-  return parser((path === endpoints.proof || path === endpoints.controls || path === endpoints.environment)
+  return parser((path === endpoints.proof || path === endpoints.controls || path === endpoints.environment || path === endpoints.history)
     ? await readBoundedProof(response) : await response.json() as unknown);
 }
 
@@ -64,3 +65,6 @@ export const loadApprovedProofSummary = (signal: AbortSignal) => getJSON(endpoin
 // Catalog reads only static definitions. The environment loader is called solely after user action.
 export const loadControlCatalog = (signal: AbortSignal) => getJSON(endpoints.controls, parseControlCatalog, signal);
 export const loadHistoricalEnvironment = (signal: AbortSignal) => getJSON(endpoints.environment, parseHistoricalEnvironment, signal);
+
+// No automatic access: the future History UI will request only after explicit user action.
+export const loadHistoricalActivity = (signal: AbortSignal) => getJSON(endpoints.history, parseHistoricalActivity, signal);

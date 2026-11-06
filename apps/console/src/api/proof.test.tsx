@@ -36,12 +36,13 @@ const approvedCapabilities = () => ({ schema_version: SCHEMA, mode: 'approved_de
     { name: 'scenario_execution', availability: 'not_enabled' },
     { name: 'control_catalog', availability: 'available', path: '/api/v1/control-catalog' },
     { name: 'historical_environment_snapshot', availability: 'available', path: '/api/v1/environment-snapshot' },
+    { name: 'historical_activity', availability: 'available', path: '/api/v1/historical-activity' },
   ] });
 
 describe('approved historical Proof Lens UI and API contracts', () => {
   it('accepts the exact server-advertised approved mode and fixed route', () => {
     const c = parseCapabilities(approvedCapabilities());
-    expect(c.capabilities.filter((a) => a.availability === 'available')).toHaveLength(5);
+    expect(c.capabilities.filter((a) => a.availability === 'available')).toHaveLength(6);
     expect(endpoints.proof).toBe('/api/v1/proof-summary');
   });
   it('rejects unapproved features and arbitrary endpoint paths', () => {

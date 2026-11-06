@@ -111,12 +111,12 @@ func newHandler(approvedProof *prooflens.ConsoleProofSummary) http.Handler {
 		}
 		// The optional route does not exist unless explicitly approved at
 		// process startup; even HEAD/OPTIONS must not disclose it by default.
-		if (r.URL.Path == "/api/v1/proof-summary" || r.URL.Path == "/api/v1/environment-snapshot") && approvedProof == nil {
+		if (r.URL.Path == "/api/v1/proof-summary" || r.URL.Path == "/api/v1/environment-snapshot" || r.URL.Path == "/api/v1/historical-activity") && approvedProof == nil {
 			writeError(w, http.StatusNotFound)
 			return
 		}
 		switch r.URL.Path {
-		case "/api/v1/health", "/api/v1/capabilities", "/api/v1/scenarios", "/api/v1/proof-summary", "/api/v1/control-catalog", "/api/v1/environment-snapshot":
+		case "/api/v1/health", "/api/v1/capabilities", "/api/v1/scenarios", "/api/v1/proof-summary", "/api/v1/control-catalog", "/api/v1/environment-snapshot", "/api/v1/historical-activity":
 			if r.Method != http.MethodGet {
 				w.Header().Set("Allow", "GET")
 				writeError(w, http.StatusMethodNotAllowed)
@@ -133,11 +133,13 @@ func newHandler(approvedProof *prooflens.ConsoleProofSummary) http.Handler {
 		case "/api/v1/capabilities":
 			proofCapability := Capability{Name: "proof_reports", Availability: "not_enabled"}
 			environmentCapability := Capability{Name: "historical_environment_snapshot", Availability: "not_enabled"}
+			historyCapability := Capability{Name: "historical_activity", Availability: "not_enabled"}
 			mode := "offline_contracts_only"
 			limitations := []string{"Health means only the local HTTP process responds; it is not Kubernetes readiness.", "No Terraform, Kubernetes, SQLite, traffic probes, evidence files or security verdicts are accessed."}
 			if approvedProof != nil {
 				proofCapability = Capability{Name: "proof_reports", Path: "/api/v1/proof-summary", Availability: "available"}
 				environmentCapability = Capability{Name: "historical_environment_snapshot", Path: "/api/v1/environment-snapshot", Availability: "available"}
+				historyCapability = Capability{Name: "historical_activity", Path: "/api/v1/historical-activity", Availability: "available"}
 				mode = "approved_detached_historical_report_read_only"
 				limitations = []string{"Health means only the local HTTP process responds; it is not Kubernetes readiness.", "An explicitly approved detached historical report was validated and loaded at startup only; it does not establish policy enforcement or authenticate original evidence."}
 			}
@@ -152,6 +154,7 @@ func newHandler(approvedProof *prooflens.ConsoleProofSummary) http.Handler {
 					{Name: "scenario_execution", Availability: "not_enabled"},
 					{Name: "control_catalog", Path: "/api/v1/control-catalog", Availability: "available"},
 					environmentCapability,
+					historyCapability,
 				},
 				Limitations: limitations,
 			})
@@ -161,6 +164,10 @@ func newHandler(approvedProof *prooflens.ConsoleProofSummary) http.Handler {
 			writeJSON(w, controlCatalog())
 		case "/api/v1/environment-snapshot":
 			writeJSON(w, projectHistoricalEnvironment(approvedProof))
+		case "/api/v1/historical-activity":
+			activity, err := projectHistoricalActivity(approvedProof)
+			if err != nil { writeError(w, http.StatusNotFound); return }
+			writeJSON(w, activity)
 		case "/api/v1/scenarios":
 			writeJSON(w, Scenarios{
 				SchemaVersion: SchemaVersion, Source: "versioned_planning_contracts_only",

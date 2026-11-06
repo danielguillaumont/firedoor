@@ -79,14 +79,14 @@ export function parseHealth(value: unknown): Health {
 }
 
 const availableNames = new Set(['health', 'scenario_contracts', 'control_catalog']);
-const disabledNames = new Set(['proof_reports', 'control_findings', 'environment_inventory', 'scenario_execution', 'historical_environment_snapshot']);
+const disabledNames = new Set(['proof_reports', 'control_findings', 'environment_inventory', 'scenario_execution', 'historical_environment_snapshot', 'historical_activity']);
 
 export function parseCapabilities(value: unknown): Capabilities {
   const v = object(value, 'capabilities');
   version(v);
   const approved = v.mode === 'approved_detached_historical_report_read_only';
   if (!approved) eq(v.mode, 'offline_contracts_only', 'capabilities.mode');
-  if (!Array.isArray(v.capabilities) || v.capabilities.length !== 8) throw new Error('capabilities: unexpected count');
+  if (!Array.isArray(v.capabilities) || v.capabilities.length !== 9) throw new Error('capabilities: unexpected count');
   const seen = new Set<string>();
   const capabilities = v.capabilities.map((item: unknown, i: number): Capability => {
     const entry = object(item, `capabilities[${i}]`);
@@ -100,6 +100,9 @@ export function parseCapabilities(value: unknown): Capabilities {
     } else if (name === 'historical_environment_snapshot' && approved) {
       eq(entry.availability, 'available', 'capability.historical_environment_snapshot');
       eq(entry.path, '/api/v1/environment-snapshot', 'capability.historical_environment_snapshot.path');
+    } else if (name === 'historical_activity' && approved) {
+      eq(entry.availability, 'available', 'capability.historical_activity');
+      eq(entry.path, '/api/v1/historical-activity', 'capability.historical_activity.path');
     } else if (name === 'proof_reports' && approved) {
       eq(entry.availability, 'available', 'capability.proof_reports');
       eq(entry.path, '/api/v1/proof-summary', 'capability.proof_reports.path');
@@ -332,4 +335,84 @@ export function parseHistoricalEnvironment(value: unknown): HistoricalEnvironmen
     namespace_count: count(v.namespace_count, 'historical_environment.namespace_count'),
     ready_pod_count: count(v.ready_pod_count, 'historical_environment.ready_pod_count'),
     policy_count: count(v.policy_count, 'historical_environment.policy_count'), current_read: false, enforcement_verified: false, limitations };
+}
+
+
+// Slice 6D3A: the approved historical timeline is NOT an execution log.
+export interface HistoricalRecord {
+  record_id: 'plan' | 'snapshot' | 'witness-data-to-app' | 'witness-edge-to-data';
+  kind: 'terraform_plan' | 'kubernetes_snapshot' | 'historical_witness';
+  captured_utc: string;
+  subject: string;
+  evidence_class: 'plan_not_applied' | 'historical_not_current' | 'historical_not_causal';
+  execution_verified: false;
+}
+export interface HistoricalActivity {
+  schema_version: typeof SCHEMA;
+  source: 'approved_detached_historical_report_only';
+  activity_status: 'historical_records_not_run_history';
+  security_verdict: 'inconclusive';
+  records: HistoricalRecord[];
+  drift: { status: 'not_assessed'; comparable_snapshots: 0; current_inventory: false };
+  limitations: string[];
+}
+const historicalRecordTypes = {
+  plan: ['terraform_plan', 'Speculative Terraform plan receipt', 'plan_not_applied'],
+  snapshot: ['kubernetes_snapshot', 'Read-only Kubernetes observation', 'historical_not_current'],
+  'witness-data-to-app': ['historical_witness', 'data-to-app A/B/A historical observation', 'historical_not_causal'],
+  'witness-edge-to-data': ['historical_witness', 'edge-to-data A/B/A historical observation', 'historical_not_causal'],
+} as const;
+export const HISTORY_LIMITATIONS = [
+  'These four entries summarize separate historical records, not four Firedoor execution runs.',
+  'The speculative Terraform plan was not applied and cannot establish deployed changes.',
+  'Historical network witnesses predate the plan and do not form a causal enforcement chain.',
+  'Only one approved Kubernetes snapshot is available; no drift comparison or live inventory was performed.',
+] as const;
+export function parseHistoricalActivity(value: unknown): HistoricalActivity {
+  const v = object(value, 'historical_activity');
+  exactFields(v, ['schema_version', 'source', 'activity_status', 'security_verdict', 'records', 'drift', 'limitations'], 'historical_activity');
+  version(v);
+  eq(v.source, 'approved_detached_historical_report_only', 'history.source');
+  eq(v.activity_status, 'historical_records_not_run_history', 'history.status');
+  eq(v.security_verdict, 'inconclusive', 'history.security_verdict');
+  if (!Array.isArray(v.records) || v.records.length !== 4) throw new Error('history: expected four historical records');
+  const seen = new Set<string>();
+  const records = v.records.map((raw: unknown, i: number): HistoricalRecord => {
+    const entry = object(raw, `history.records[${i}]`);
+    exactFields(entry, ['record_id', 'kind', 'captured_utc', 'subject', 'evidence_class', 'execution_verified'], `history.records[${i}]`);
+    const id = text(entry.record_id, 'history.record_id');
+    if (!(id in historicalRecordTypes) || seen.has(id)) throw new Error('Unsupported or duplicate historical record');
+    seen.add(id);
+    const canonical = historicalRecordTypes[id as keyof typeof historicalRecordTypes];
+    eq(entry.kind, canonical[0], 'history.record.kind');
+    eq(entry.subject, canonical[1], 'history.record.subject');
+    eq(entry.evidence_class, canonical[2], 'history.record.evidence_class');
+    eq(entry.execution_verified, false, 'history.record.execution_verified');
+    return { record_id: id as HistoricalRecord['record_id'], kind: canonical[0],
+      captured_utc: utc(entry.captured_utc, 'history.record.captured_utc'), subject: canonical[1],
+      evidence_class: canonical[2], execution_verified: false };
+  });
+  if (seen.size !== 4) throw new Error('Missing historical record');
+  for (let i = 1; i < records.length; i++) {
+    if (Date.parse(records[i - 1].captured_utc) < Date.parse(records[i].captured_utc)) throw new Error('History not newest-first');
+  }
+  const planAt = Date.parse(records.find((r) => r.record_id === 'plan')!.captured_utc);
+  const snapshotAt = Date.parse(records.find((r) => r.record_id === 'snapshot')!.captured_utc);
+  if (snapshotAt < planAt || records.some((r) => r.kind === 'historical_witness' && Date.parse(r.captured_utc) >= planAt)) {
+    throw new Error('History chronology incompatible with recorded provenance');
+  }
+  const drift = object(v.drift, 'history.drift');
+  exactFields(drift, ['status', 'comparable_snapshots', 'current_inventory'], 'history.drift');
+  eq(drift.status, 'not_assessed', 'history.drift.status');
+  eq(drift.comparable_snapshots, 0, 'history.drift.comparable_snapshots');
+  eq(drift.current_inventory, false, 'history.drift.current_inventory');
+  const limits = strings(v.limitations, 'history.limitations');
+  if (limits.length !== HISTORY_LIMITATIONS.length || limits.some((limit, i) => limit !== HISTORY_LIMITATIONS[i])) {
+    throw new Error('History limitations changed');
+  }
+  return {
+    schema_version: SCHEMA, source: 'approved_detached_historical_report_only', activity_status: 'historical_records_not_run_history',
+    security_verdict: 'inconclusive', records, drift: { status: 'not_assessed', comparable_snapshots: 0, current_inventory: false },
+    limitations: limits,
+  };
 }

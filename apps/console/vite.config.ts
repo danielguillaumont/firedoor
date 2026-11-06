@@ -1,7 +1,7 @@
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 
-// Local development ONLY: proxy precisely six fixed read-only Go endpoints.
+// Local development ONLY: proxy precisely seven fixed read-only Go endpoints.
 // No wildcard paths, credentials, or write-capable API operations are proxied.
 // Go independently checks the target Host and request method.
 export default defineConfig({
@@ -11,7 +11,7 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
     proxy: {
-      '^/api/v1/(health|capabilities|scenarios|proof-summary|control-catalog|environment-snapshot)$': {
+      '^/api/v1/(health|capabilities|scenarios|proof-summary|control-catalog|environment-snapshot|historical-activity)$': {
         target: 'http://127.0.0.1:8787',
         changeOrigin: true,
         configure: (proxy) => {

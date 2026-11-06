@@ -97,7 +97,7 @@ func serveConsoleAPI(cmd *cobra.Command, enableApprovedProof bool, consent strin
 	go func() { done <- server.Serve(listener) }()
 	banner := fmt.Sprintf("FIREDOOR v0.6 / LOCAL READ-ONLY CONSOLE API\nGET http://%s/api/v1/health\nGET http://%s/api/v1/capabilities\nGET http://%s/api/v1/scenarios\n", api.ListenAddress, api.ListenAddress, api.ListenAddress)
 	if enableApprovedProof {
-		banner += fmt.Sprintf("GET http://%s/api/v1/proof-summary (approved detached historical summary only)\nGET http://%s/api/v1/environment-snapshot (historical, not live)\n", api.ListenAddress, api.ListenAddress)
+		banner += fmt.Sprintf("GET http://%s/api/v1/proof-summary (approved detached historical summary only)\nGET http://%s/api/v1/environment-snapshot (historical, not live)\nGET http://%s/api/v1/historical-activity (not run history or drift proof)\n", api.ListenAddress, api.ListenAddress, api.ListenAddress)
 	}
 	banner += fmt.Sprintf("GET http://%s/api/v1/control-catalog (definitions only, not findings)\n", api.ListenAddress)
 	banner += "No Terraform, Kubernetes, SQLite, or proof collection. Ctrl+C to stop.\n"

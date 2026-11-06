@@ -45,12 +45,14 @@ const capabilitiesFixture = (approved: boolean) => parseCapabilities({
     { name: 'control_catalog', availability: 'available', path: '/api/v1/control-catalog' },
     approved ? { name: 'historical_environment_snapshot', availability: 'available', path: '/api/v1/environment-snapshot' }
       : { name: 'historical_environment_snapshot', availability: 'not_enabled' },
+    approved ? { name: 'historical_activity', availability: 'available', path: '/api/v1/historical-activity' }
+      : { name: 'historical_activity', availability: 'not_enabled' },
   ],
 });
 const copy = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 
 describe('6D2 read-only observation contracts', () => {
-  it('Vite forwards exactly the six approved read-only endpoints to loopback', () => {
+  it('Vite forwards exactly the seven approved read-only endpoints to loopback', () => {
     const proxy = (viteConfig as UserConfig).server?.proxy;
     expect(proxy).toBeDefined();
     if (!proxy) throw new Error('Missing development proxy');

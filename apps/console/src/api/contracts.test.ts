@@ -11,6 +11,7 @@ const caps = { schema_version: SCHEMA, mode: 'offline_contracts_only', limitatio
   { name: 'scenario_execution', availability: 'not_enabled' },
   { name: 'control_catalog', availability: 'available', path: '/api/v1/control-catalog' },
   { name: 'historical_environment_snapshot', availability: 'not_enabled' },
+  { name: 'historical_activity', availability: 'not_enabled' },
 ] };
 const names = ['Compromised Workload', 'Identity Overreach', 'Secret Boundary', 'Lateral Movement', 'Privileged Workload Admission'];
 const scenarios = { schema_version: SCHEMA, source: 'versioned_planning_contracts_only', limitations: ['Planning only'], scenarios: names.map((name, i) => ({
@@ -30,7 +31,7 @@ describe('fixed API v0.6 contract gates', () => {
     expect(() => parseHealth({ ...health, schema_version: 'future' })).toThrow();
     expect(() => parseHealth({ status: 'ok' })).toThrow();
   });
-  it('parses eight explicit capability states and rejects unguarded proof access', () => {
+  it('parses nine explicit capability states and rejects unguarded proof access', () => {
     expect(parseCapabilities(caps).capabilities.filter((c) => c.availability === 'available')).toHaveLength(3);
     const altered = clone(caps);
     altered.capabilities[2].availability = 'available';
@@ -87,7 +88,9 @@ describe('6D1A control and historical environment capability boundaries', () => 
     enabled.mode = 'approved_detached_historical_report_read_only';
     enabled.capabilities[2].availability = 'available';
     enabled.capabilities[2].path = '/api/v1/proof-summary';
-    expect(parseCapabilities(enabled).capabilities.filter((c) => c.availability === 'available')).toHaveLength(5);
+    enabled.capabilities[8].availability = 'available';
+    enabled.capabilities[8].path = '/api/v1/historical-activity';
+    expect(parseCapabilities(enabled).capabilities.filter((c) => c.availability === 'available')).toHaveLength(6);
     enabled.capabilities[4].availability = 'available';
     expect(() => parseCapabilities(enabled)).toThrow();
   });

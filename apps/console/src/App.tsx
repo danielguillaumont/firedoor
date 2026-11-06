@@ -88,7 +88,7 @@ function ScenarioView({ data, retry }: { data: Remote<Scenarios>; retry: () => v
 const capabilityLabels: Record<string, string> = {
   health: 'API process health', scenario_contracts: 'Scenario planning contracts', proof_reports: 'Proof Lens reports',
   control_findings: 'Control findings', environment_inventory: 'Environment inventory', scenario_execution: 'Scenario execution',
-  control_catalog: 'Control definition catalog (not evaluated)', historical_environment_snapshot: 'Approved historical environment snapshot',
+  control_catalog: 'Control definition catalog (not evaluated)', historical_environment_snapshot: 'Approved historical environment snapshot', historical_activity: 'Approved historical activity (not execution runs)',
 };
 
 function CapabilitiesView({ data, retry }: { data: Remote<Capabilities>; retry: () => void }) {
