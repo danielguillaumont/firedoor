@@ -2,12 +2,13 @@ import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { loadCapabilities, loadHealth, loadScenarios } from './api/client';
 import ProofLensView from './components/ProofLensView';
+import { ControlsView, EnvironmentView } from './components/ObservationViews';
 import type { Capabilities, Health, Scenario, Scenarios } from './api/contracts';
 import BrandMark from './components/BrandMark';
 import Icon from './components/Icon';
 import type { IconName } from './components/Icon';
 
-type Page = 'overview' | 'scenarios' | 'capabilities' | 'proof';
+type Page = 'overview' | 'scenarios' | 'capabilities' | 'proof' | 'controls' | 'environment';
 type Remote<T> = { state: 'loading' | 'ready' | 'error'; data: T | null; error: string | null };
 const loading = <T,>(): Remote<T> => ({ state: 'loading', data: null, error: null });
 
@@ -15,8 +16,8 @@ const navItems: Array<{ page: Page | null; label: string; icon: IconName; note?:
   { page: 'overview', label: 'Overview', icon: 'dashboard' },
   { page: 'scenarios', label: 'Scenarios', icon: 'layers' },
   { page: 'proof', label: 'Proof Lens', icon: 'eye' },
-  { page: null, label: 'Controls', icon: 'shield', note: '6D' },
-  { page: null, label: 'Environment', icon: 'server', note: '6D' },
+  { page: 'controls', label: 'Controls', icon: 'shield' },
+  { page: 'environment', label: 'Environment', icon: 'server' },
 ];
 
 function SectionLabel({ children }: { children: ReactNode }) {
@@ -120,5 +121,5 @@ export default function App() {
     <div className="workspace-label">WORKSPACE <span>V0.6 PREVIEW</span></div>
     <nav aria-label="Main navigation" className="nav">{navItems.map((item) => <button key={item.label} type="button" disabled={item.page === null} onClick={() => item.page && setPage(item.page)} className={`nav-item ${page === item.page ? 'active' : ''}`} aria-current={page === item.page ? 'page' : undefined}><Icon name={item.icon} size={19}/><span>{item.label}</span>{item.note && <small>{item.note}</small>}</button>)}</nav>
     <div className="sidebar-bottom"><div className="sidebar-cap"><span className="tiny-square"/> DEVELOPMENT POSTURE</div><div className="sidebar-desc">No live validations, Terraform operations, or automatic evidence reads.</div><button type="button" className="sidebar-system" onClick={() => setPage('capabilities')}><Icon name="activity" size={17}/> API capabilities <Icon name="chevron" size={17}/></button></div>
-  </aside><main className="main"><header className="topbar"><div className="breadcrumb">WORKSPACE <span>/</span> <strong>{page === 'overview' ? 'OVERVIEW' : page === 'scenarios' ? 'SCENARIOS' : page === 'proof' ? 'PROOF LENS' : 'CAPABILITIES'}</strong></div><div className="topbar-actions"><ApiState health={health}/><button className="refresh-button" type="button" onClick={retry} aria-label="Refresh local API responses" title="Refresh local API responses"><Icon name="refresh" size={17}/></button></div></header><div className="content" key={page}>{page === 'overview' ? <Overview health={health} capabilities={capabilities} scenarios={scenarios} retry={retry} navigate={setPage}/> : page === 'scenarios' ? <ScenarioView data={scenarios} retry={retry}/> : page === 'proof' ? <ProofLensView key={`${refresh}-${capabilities.state}-${capabilities.data?.mode ?? 'unavailable'}`} capabilities={capabilities.data}/> : <CapabilitiesView data={capabilities} retry={retry}/>}</div><footer className="footer"><span>FIREDOOR / LOCAL INSPECTION DESK</span><span>GO ENGINE <b>·</b> TERRAFORM INTENT <b>·</b> KUBERNETES EVIDENCE</span><span>SLICE 6C4A / NO CLAIM OF ENFORCEMENT</span></footer></main></div>;
+  </aside><main className="main"><header className="topbar"><div className="breadcrumb">WORKSPACE <span>/</span> <strong>{page === 'overview' ? 'OVERVIEW' : page === 'scenarios' ? 'SCENARIOS' : page === 'proof' ? 'PROOF LENS' : page === 'controls' ? 'CONTROLS' : page === 'environment' ? 'ENVIRONMENT' : 'CAPABILITIES'}</strong></div><div className="topbar-actions"><ApiState health={health}/><button className="refresh-button" type="button" onClick={retry} aria-label="Refresh local API responses" title="Refresh local API responses"><Icon name="refresh" size={17}/></button></div></header><div className="content" key={page}>{page === 'overview' ? <Overview health={health} capabilities={capabilities} scenarios={scenarios} retry={retry} navigate={setPage}/> : page === 'scenarios' ? <ScenarioView data={scenarios} retry={retry}/> : page === 'proof' ? <ProofLensView key={`${refresh}-${capabilities.state}-${capabilities.data?.mode ?? 'unavailable'}`} capabilities={capabilities.data}/> : page === 'controls' ? <ControlsView refresh={refresh}/> : page === 'environment' ? <EnvironmentView capabilities={capabilities.data} capabilityLoading={capabilities.state === 'loading'}/> : <CapabilitiesView data={capabilities} retry={retry}/>}</div><footer className="footer"><span>FIREDOOR / LOCAL INSPECTION DESK</span><span>GO ENGINE <b>·</b> TERRAFORM INTENT <b>·</b> KUBERNETES EVIDENCE</span><span>SLICE 6D2 / NO CLAIM OF ENFORCEMENT</span></footer></main></div>;
 }

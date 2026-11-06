@@ -244,3 +244,92 @@ export function parseProofSummary(value: unknown): ProofSummary {
     historical_witnesses: witnesses, limitations,
   };
 }
+
+
+// 6D2: Read-only v0.6 projections, never evaluated control findings or live inventory.
+export interface ControlDefinition {
+  id: string;
+  legacy_id: string;
+  name: string;
+  domain: 'identity' | 'network' | 'workload';
+  severity: 'info' | 'low' | 'medium' | 'high' | 'critical';
+  description: string;
+}
+export interface ControlCatalog {
+  schema_version: typeof SCHEMA;
+  source: 'go_control_definitions_only';
+  evaluation_status: 'not_evaluated';
+  definitions: ControlDefinition[];
+  limitations: string[];
+}
+export interface HistoricalEnvironment {
+  schema_version: typeof SCHEMA;
+  source: 'approved_detached_historical_report_only';
+  observation_status: 'historical_snapshot_not_current';
+  cluster: 'firedoor-local';
+  context: 'kind-firedoor-local';
+  profile: 'hardened';
+  captured_utc: string;
+  namespace_count: number;
+  ready_pod_count: number;
+  policy_count: number;
+  current_read: false;
+  enforcement_verified: false;
+  limitations: string[];
+}
+
+const controlIDs = ['C-001', 'C-002', 'C-003', 'C-004', 'C-006', 'C-007'];
+export function parseControlCatalog(value: unknown): ControlCatalog {
+  const v = object(value, 'control_catalog');
+  exactFields(v, ['schema_version', 'source', 'evaluation_status', 'definitions', 'limitations'], 'control_catalog');
+  version(v);
+  eq(v.source, 'go_control_definitions_only', 'control_catalog.source');
+  eq(v.evaluation_status, 'not_evaluated', 'control_catalog.evaluation_status');
+  if (!Array.isArray(v.definitions) || v.definitions.length !== 6) throw new Error('control_catalog: expected six definitions');
+  const seen = new Set<string>();
+  const definitions = v.definitions.map((raw: unknown, index: number): ControlDefinition => {
+    const d = object(raw, `definition[${index}]`);
+    exactFields(d, ['id', 'legacy_id', 'name', 'domain', 'severity', 'description'], `definition[${index}]`);
+    const legacy_id = text(d.legacy_id, 'definition.legacy_id');
+    if (!controlIDs.includes(legacy_id) || seen.has(legacy_id)) throw new Error('Unknown or duplicated control ID');
+    seen.add(legacy_id);
+    const id = text(d.id, 'definition.id');
+    if (!/^CTRL-(ID|NET|WL)-\d{3}$/.test(id)) throw new Error('Invalid canonical control ID');
+    const domain = text(d.domain, 'definition.domain');
+    const severity = text(d.severity, 'definition.severity');
+    if (!['identity', 'network', 'workload'].includes(domain)) throw new Error('Unsupported control domain');
+    if (!['info', 'low', 'medium', 'high', 'critical'].includes(severity)) throw new Error('Unsupported control severity');
+    return { id, legacy_id, name: text(d.name, 'definition.name'), domain: domain as ControlDefinition['domain'],
+      severity: severity as ControlDefinition['severity'], description: text(d.description, 'definition.description') };
+  });
+  if (controlIDs.some((id) => !seen.has(id))) throw new Error('Control catalog missing a foundation definition');
+  const limitations = strings(v.limitations, 'control_catalog.limitations');
+  if (limitations.length !== 2 || !limitations[0].includes('specifications') || !limitations[1].includes('No Kubernetes inspection')) {
+    throw new Error('Control catalog limitations absent or misleading');
+  }
+  return { schema_version: SCHEMA, source: 'go_control_definitions_only', evaluation_status: 'not_evaluated', definitions, limitations };
+}
+
+export function parseHistoricalEnvironment(value: unknown): HistoricalEnvironment {
+  const v = object(value, 'historical_environment');
+  exactFields(v, ['schema_version', 'source', 'observation_status', 'cluster', 'context', 'profile', 'captured_utc',
+    'namespace_count', 'ready_pod_count', 'policy_count', 'current_read', 'enforcement_verified', 'limitations'], 'historical_environment');
+  version(v);
+  eq(v.source, 'approved_detached_historical_report_only', 'historical_environment.source');
+  eq(v.observation_status, 'historical_snapshot_not_current', 'historical_environment.observation_status');
+  eq(v.cluster, 'firedoor-local', 'historical_environment.cluster');
+  eq(v.context, 'kind-firedoor-local', 'historical_environment.context');
+  eq(v.profile, 'hardened', 'historical_environment.profile');
+  eq(v.current_read, false, 'historical_environment.current_read');
+  eq(v.enforcement_verified, false, 'historical_environment.enforcement_verified');
+  const limitations = strings(v.limitations, 'historical_environment.limitations');
+  if (limitations.length !== 3 || !limitations[0].includes('not a current') || !limitations[1].includes('do not establish enforcement') || !limitations[2].includes('not an independently authenticated')) {
+    throw new Error('Historical environment limitations absent or misleading');
+  }
+  return { schema_version: SCHEMA, source: 'approved_detached_historical_report_only',
+    observation_status: 'historical_snapshot_not_current', cluster: 'firedoor-local', context: 'kind-firedoor-local', profile: 'hardened',
+    captured_utc: utc(v.captured_utc, 'historical_environment.captured_utc'),
+    namespace_count: count(v.namespace_count, 'historical_environment.namespace_count'),
+    ready_pod_count: count(v.ready_pod_count, 'historical_environment.ready_pod_count'),
+    policy_count: count(v.policy_count, 'historical_environment.policy_count'), current_read: false, enforcement_verified: false, limitations };
+}

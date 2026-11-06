@@ -1,10 +1,12 @@
-import { parseCapabilities, parseHealth, parseScenarios, parseProofSummary } from './contracts';
+import { parseCapabilities, parseHealth, parseScenarios, parseProofSummary, parseControlCatalog, parseHistoricalEnvironment } from './contracts';
 
 export const endpoints = {
   health: '/api/v1/health',
   capabilities: '/api/v1/capabilities',
   scenarios: '/api/v1/scenarios',
   proof: '/api/v1/proof-summary',
+  controls: '/api/v1/control-catalog',
+  environment: '/api/v1/environment-snapshot',
 } as const;
 
 // Bound the opt-in proof response even when the server sends chunked content
@@ -48,7 +50,8 @@ export async function getJSON<T>(path: (typeof endpoints)[keyof typeof endpoints
   if (!response.ok) throw new Error(`API returned HTTP ${response.status}`);
   const contentType = response.headers.get('Content-Type') ?? '';
   if (!contentType.toLowerCase().includes('application/json')) throw new Error('API did not return JSON');
-  return parser(path === endpoints.proof ? await readBoundedProof(response) : await response.json() as unknown);
+  return parser((path === endpoints.proof || path === endpoints.controls || path === endpoints.environment)
+    ? await readBoundedProof(response) : await response.json() as unknown);
 }
 
 export const loadHealth = (signal: AbortSignal) => getJSON(endpoints.health, parseHealth, signal);
@@ -57,3 +60,7 @@ export const loadScenarios = (signal: AbortSignal) => getJSON(endpoints.scenario
 
 // Only called following deliberate user interaction and advertised server capability.
 export const loadApprovedProofSummary = (signal: AbortSignal) => getJSON(endpoints.proof, parseProofSummary, signal);
+
+// Catalog reads only static definitions. The environment loader is called solely after user action.
+export const loadControlCatalog = (signal: AbortSignal) => getJSON(endpoints.controls, parseControlCatalog, signal);
+export const loadHistoricalEnvironment = (signal: AbortSignal) => getJSON(endpoints.environment, parseHistoricalEnvironment, signal);
