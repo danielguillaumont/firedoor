@@ -1,0 +1,11 @@
+# Local development dependencies, build output and artifacts
+node_modules/
+dist/
+coverage/
+.vite/
+.vitest/
+*.tsbuildinfo
+*.log
+.env
+.env.*
+!.env.example

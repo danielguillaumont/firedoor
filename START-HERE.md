@@ -1,55 +1,61 @@
-# Firedoor - first session on Windows PowerShell
+# Firedoor — start here (Windows / PowerShell 5.1)
 
-This is a **starter ZIP**, not a claim that v0.0 is already verified or merged. The archive contains a single `firedoor/` directory; extract it into `$HOME\Projects`, not inside an existing repository. Later milestone ZIPs will be scoped changes, never blind overwrites.
+This is the **current v0.6 source repository**, not the original v0.0 starter ZIP. If you already have a checkout at `C:\Users\<you>\Projects\firedoor`, **do not extract another foundation ZIP, re-run `git init`, or overwrite your local Terraform state**. The original foundation instructions are preserved by earlier source history.
 
-## 1. Extract and inspect
+Firedoor contains two separate operator workflows: a **safe, read-only local browser demo** and a **dedicated owned kind/Calico security lab**. Start with the browser; you need no cluster for that.
 
-```powershell
-New-Item -ItemType Directory -Path "$HOME\Projects" -Force | Out-Null
-Expand-Archive -LiteralPath "$HOME\Downloads\Firedoor-v00-Foundation-Starter.zip" -DestinationPath "$HOME\Projects"
-Set-Location "$HOME\Projects\firedoor"
-Get-ChildItem -Force
-```
+## A. Read-only browser demo (recommended first)
 
-Use the actual download path if your browser saved the ZIP elsewhere. Do not extract again if this folder already contains work.
-
-## 2. Inspect host tools (no installs or Kubernetes mutation)
+Prerequisites: Windows PowerShell 5.1, Git, Go **1.27**, Node.js **22+**, npm. The default console does not need Docker, kind, Kubernetes credentials or Terraform.
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\Check-Environment.ps1
+cd "$HOME\Projects\firedoor"
 go version
-terraform version
-git --version
+node --version
+npm --version
+go mod download
+cd .\apps\console
+npm ci
 ```
 
-For the full lab later, Docker Desktop, kind, kubectl and Node.js will also be required. v0.0 unit tests only need Git, Go and Terraform.
+Open two named Windows Terminal tabs:
 
-## 3. First dependency installation and validation
+**`api`**
 
 ```powershell
-go mod tidy
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\Test-Foundation.ps1
+cd "$HOME\Projects\firedoor"
+go run ./cmd/firedoor console-api serve
 ```
 
-The first Go and Terraform dependency downloads need internet. If the validation fails, stop, copy the full output, and fix it before GitHub push. Running `terraform init -backend=false` is not `apply` and will not create a cluster.
-
-## 4. Git and GitHub (after gates pass)
-
-Create an empty **firedoor** GitHub repository, **without** pre-generated README/gitignore/license; select Git SSH. Then:
+**`react`**
 
 ```powershell
-git init -b main
-git commit --allow-empty -m "chore: initialize Firedoor repository"
-git switch -c feat/v00-foundation
-git add .
-git status --short
-git diff --cached --check
-git commit -m "feat: bootstrap Firedoor v0.0 foundation"
-git remote add origin git@github.com:danielguillaumont/firedoor.git
-git push -u origin main
-git push -u origin feat/v00-foundation
+cd "$HOME\Projects\firedoor\apps\console"
+npm run dev
 ```
 
-Open a GitHub PR from `feat/v00-foundation` to `main` and merge **only after Actions passes**. Do not push any generated Terraform state, plans, tokens, kubeconfig, or `.terraform/` directory. Validate `git status --short` and `git ls-files` before push.
+Visit `http://127.0.0.1:5173/`. Overview, Scenarios, Controls and API Capabilities can load default read-only contracts; Proof Lens, Environment and History remain **unavailable without separate approval**. Keep the server tabs open; use `Ctrl+C` to stop each one. A third tab, **`other`**, can run Git and quality checks.
 
-**First stop point:** after running Step 2, share the inventory and version output; verify all prerequisites before continuing.
+```powershell
+# Third terminal (`other`), from the repository root
+cd "$HOME\Projects\firedoor"
+go test ./...
+go vet ./...
+go mod verify
+cd .\apps\console
+npm run typecheck
+npm test
+npm run build
+```
+
+For an exact screenshot-ready demo and optional historical approval, follow the [v0.6 demo guide](docs/v06-console-demo-guide.md). The optional detached historical report is **not distributed with the repository** and must not be uploaded or committed.
+
+## B. Dedicated controlled Kubernetes lab (separate, optional)
+
+The earlier v0.1–v0.5 CLI workflows require additional installed prerequisites, a positively verified owned kind context, Docker Desktop, kubectl, Terraform and explicit operator safeguards. Never run bounded probe, A/B/A policy experiments, Terraform apply/destroy or evidence collection just to make the console load. Start with [SECURITY.md](SECURITY.md), [architecture](docs/architecture.md), and the [v0.3 safety boundaries](docs/v03-safety-boundaries.md) before any such activity.
+
+## C. Git checkpoint discipline
+
+The current v0.6 development work belongs on `feat/v06-console`; use `git status --short --branch` before applying each milestone ZIP. Validate first, stage only reviewed files, run `git diff --cached --check`, and push only after successful tests. `docs/evidence/local/` and Terraform state remain Git-ignored. Do not merge the v0.6 branch until the final PR and GitHub CI review is completed.
+
+Read the [main README](README.md) for the full product and source map.

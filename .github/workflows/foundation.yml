@@ -31,6 +31,28 @@ jobs:
       - name: CLI help
         run: go run ./cmd/firedoor --help
 
+  console-quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: apps/console
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: apps/console/package-lock.json
+      - name: Install locked frontend dependencies
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript typecheck
+        run: npm run typecheck
+      - name: Run all frontend tests
+        run: npm test
+      - name: Production frontend build
+        run: npm run build
+
   terraform-quality:
     runs-on: ubuntu-latest
     steps:
@@ -45,5 +67,5 @@ jobs:
       - name: Terraform validate
         run: terraform -chdir=infrastructure/terraform/testbed validate
 
-# v0.0 intentionally has no kind cluster or Terraform apply.
-# v0.1+ will add independent CNI enforcement tests in scoped ephemeral clusters.
+# Source-quality gates only: CI does not create kind clusters, run Terraform apply,
+# collect security evidence, or attest NetworkPolicy enforcement.
