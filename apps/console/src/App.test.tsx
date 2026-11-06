@@ -20,6 +20,9 @@ describe('console UI evidence boundary', () => {
     expect(html).toContain('Contract preview');
     expect(html).toContain('not a security assessment');
     expect(html).toContain('Connecting to API');
+    expect(html).toContain('Skip to main content');
+    expect(html).toContain('href="#firedoor-main"');
+    expect(html).toContain('id="firedoor-main"');
     expect(html).toContain('History');
     expect(html).not.toContain('Load historical activity');
     expect(html).toContain('not cluster health');
