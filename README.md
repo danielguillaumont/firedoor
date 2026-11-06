@@ -4,7 +4,7 @@
 
 **Firedoor is a local-first Kubernetes security engineering lab and evidence inspection desk.** It combines a Go security CLI, a dedicated kind/Calico testbed, Terraform-managed configuration, bounded network observations, and a React console. Its core design rule is simple: **a security control's intention, a Kubernetes configuration, an observed connection, and proof of enforcement are not the same thing.**
 
-> **Current status — November 6, 2026:** The **v0.6 read-only console** is implemented and locally validated on `feat/v06-console` through the 6E2A documentation checkpoint (`54241d2`). The feature branch has **not yet completed its final documentation/PR/merge review**. This is a controlled educational/portfolio project, **not** a production scanner, continuously running monitor, independent attestation, or certified security assessment.
+> **Current status — November 6, 2026:** The **v0.6 read-only console** is implemented and locally validated on `feat/v06-console` through the 6E2B screenshot checkpoint (`f693257`). The feature branch has **not yet completed its final documentation/PR/merge review**. This is a controlled educational/portfolio project, **not** a production scanner, continuously running monitor, independent attestation, or certified security assessment.
 
 ## See the system in action
 
@@ -105,7 +105,7 @@ npm test
 npm run build
 ```
 
-At the 6E1B checkpoint, the local Windows run passed the Go suite, TypeScript, **47/47 Vitest tests**, and the Vite production build. The repo's GitHub Actions workflow currently runs **Go and Terraform source checks**; it does not yet run frontend Vitest or live Kubernetes/Calico behavior tests. Do not treat local results as external verification or a passing PR review.
+At the 6E2B checkpoint, the local Windows run passed the Go suite, TypeScript, **47/47 Vitest tests**, and the Vite production build. The GitHub Actions workflow now defines separate **Go, Terraform, and React console quality jobs** (locked npm install, TypeScript, Vitest and frontend build). **These are source-quality gates, not live Kubernetes/Calico enforcement tests.** An actual green GitHub Actions run on the proposed PR must be verified before merging; a workflow definition alone is not a successful CI run.
 
 ## What makes Firedoor different
 
