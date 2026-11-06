@@ -1,5 +1,21 @@
 # Firedoor build progress
 
+## 2026-11-06 UTC — v0.6 local console engineering review (feature branch, PR pending)
+
+**Branch:** `feat/v06-console` · **Latest locally verified checkpoint:** `e1ec57d` (6E1B), pushed and synchronized. The complete 6E1B Windows suite passed **47/47 Vitest tests**, TypeScript, Vite production build, full Go tests, vet and module dependency verification. API-offline/recovery and locked/approved historical screens were checked in a local browser. These are developer verification results, **not** a GitHub CI verdict or a merged release.
+
+- **6A–6C:** Local-only React console foundation, read-only Go HTTP contracts, approved detached Proof Lens, and secure UI projection.
+- **6D1–6D2:** Read-only Controls catalog and historical Environment view, with safe default locked state.
+- **6D3A–6D3B:** Approved-only Historical Activity API and History timeline. Four genuinely recorded artifacts are **not execution runs**; drift remains **NOT ASSESSED**.
+- **6E1A:** Scenarios keyboard-accessible detail dialog, Escape/focus restoration and skip navigation; local tests and browser inspection passed.
+- **6E1B:** All seven frontend routes use 32 KiB strict JSON limits, bounded timeouts, caller cancellation, no credentials/redirects, and fail-closed responses; **47/47** Vitest tests passed. Local Git push ended at `e1ec57d` with a clean worktree.
+
+**Important limits:** The browser cannot run Terraform, Kubernetes, SQLite or scenario execution. Approved detached reports require startup-time operator consent and explicit load buttons, but this **is not user authentication**. API health means only that the local process responded. The v0.2 Edge control failure and unresolved RBAC outcomes are separate from the v0.6 static control catalog. The v0.5 verdict is **INCONCLUSIVE**; no independent causality, current-cluster attestations or drift comparisons were established.
+
+**Next:** Update README, entry-point security/architecture and reproducible demo documentation (6E2A), then curate only reviewed, sanitized browser screenshots (6E2B), run final feature-branch/PR/CI review and merge only after evidence-safe acceptance (6E3).
+
+---
+
 ## 2026-11-05 UTC — v0.3 bounded Go network verification (local validation complete; PR pending)
 
 **Branch:** `feat/v03-live-verification` (from `5a6bda0`). **Status:** Slices 1–4 and the public CLI are validated locally; final v0.3 source closeout and GitHub commit/CI/PR/merge still pending. No v0.3 merge is claimed.
