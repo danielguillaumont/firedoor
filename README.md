@@ -4,9 +4,34 @@
 
 **Firedoor is a local-first Kubernetes security engineering lab and evidence inspection desk.** It combines a Go security CLI, a dedicated kind/Calico testbed, Terraform-managed configuration, bounded network observations, and a React console. Its core design rule is simple: **a security control's intention, a Kubernetes configuration, an observed connection, and proof of enforcement are not the same thing.**
 
-> **Current status — November 6, 2026:** The **v0.6 read-only console** is implemented and locally validated on `feat/v06-console` through the 6E1B transport-hardening checkpoint (`e1ec57d`). The feature branch has **not yet completed its final documentation/PR/merge review**. This is a controlled educational/portfolio project, **not** a production scanner, continuously running monitor, independent attestation, or certified security assessment.
+> **Current status — November 6, 2026:** The **v0.6 read-only console** is implemented and locally validated on `feat/v06-console` through the 6E2A documentation checkpoint (`54241d2`). The feature branch has **not yet completed its final documentation/PR/merge review**. This is a controlled educational/portfolio project, **not** a production scanner, continuously running monitor, independent attestation, or certified security assessment.
 
 ## See the system in action
+
+[![Firedoor Overview — local API, planning-only scenario contracts, and evidence boundaries](docs/screenshots/01-overview-default.png)](docs/screenshots/01-overview-default.png)
+
+*Actual Firedoor console running in **default local read-only mode**. Green local API status means the process responds, **not** that Kubernetes security controls are enforced.*
+
+**Explore default-mode screens:** [Scenarios — five NOT TESTED planning contracts](docs/screenshots/02-scenarios-contracts.png) · [Controls — six NOT EVALUATED definitions](docs/screenshots/03-controls-definitions.png) · [History — locked until explicit approval](docs/screenshots/04-history-locked.png).
+
+<details>
+<summary>Preview more console screenshots</summary>
+
+### Scenario contracts
+
+[![Five scenario contracts — planning only](docs/screenshots/02-scenarios-contracts.png)](docs/screenshots/02-scenarios-contracts.png)
+
+### Security control definitions
+
+[![Six security control specifications — not evaluated](docs/screenshots/03-controls-definitions.png)](docs/screenshots/03-controls-definitions.png)
+
+### Historical activity locked by default
+
+[![History unavailable without explicit approval](docs/screenshots/04-history-locked.png)](docs/screenshots/04-history-locked.png)
+
+</details>
+
+These screenshots contain **no private historical report** and can be reproduced from a clean local clone. Optional historical views require separately vetted, Git-ignored evidence and are intentionally **not** included in this public gallery. See the [demo guide](docs/v06-console-demo-guide.md) for review criteria.
 
 The console is designed to make evidence provenance, unknowns, and security limits as visible as the results. It has six primary workspaces plus a detailed API capabilities screen.
 
