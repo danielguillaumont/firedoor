@@ -6,7 +6,7 @@ import ProofLensView, { ProofLensReport } from '../components/ProofLensView';
 
 const fixture = () => ({
   schema_version: PROOF_SCHEMA, source_report_schema: 'firedoor.v05.proof-report.v1',
-  source_report_sha256: 'b'.repeat(64), verdict: 'INCONCLUSIVE',
+  source_report_sha256: 'b'.repeat(64), verdict: 'inconclusive',
   evidence_status: 'historical_context_only_not_a_proof_chain',
   proof_chain_established: false, independently_attested: false, local_consistency_only: true,
   terraform: { receipt_id: 'TFPLAN-20261105T172235Z-813ff79fe4d0fda4b35cac81', captured_utc: '2026-11-05T17:22:35Z',
@@ -52,7 +52,7 @@ describe('approved historical Proof Lens UI and API contracts', () => {
   });
   it('accepts and minimizes the verified, inconclusive 6C1 display contract', () => {
     const report = parseProofSummary(fixture());
-    expect(report.verdict).toBe('INCONCLUSIVE');
+    expect(report.verdict).toBe('inconclusive');
     expect(report.proof_chain_established).toBe(false);
     expect(report.historical_witnesses[0].phases[1].observed).toBe('reachable');
     expect(report.terraform.applied).toBe(false);
@@ -60,6 +60,7 @@ describe('approved historical Proof Lens UI and API contracts', () => {
   it('rejects fabricated verdicts, false apply, current reads, causal claims and altered history', () => {
     const changes: Array<(r: ReturnType<typeof fixture>) => void> = [
       (r) => { r.verdict = 'CONTAINED'; },
+      (r) => { r.verdict = 'INCONCLUSIVE'; }, // Reject case drift: Go's canonical wire value is lowercase.
       (r) => { r.proof_chain_established = true; },
       (r) => { r.independently_attested = true; },
       (r) => { r.terraform.applied = true; },
@@ -114,7 +115,7 @@ describe('approved historical Proof Lens UI and API contracts', () => {
     try {
       spy.mockResolvedValueOnce(new Response(JSON.stringify(fixture()), { headers: { 'Content-Type': 'application/json' } }));
       const summary = await loadApprovedProofSummary(new AbortController().signal);
-      expect(summary.verdict).toBe('INCONCLUSIVE');
+      expect(summary.verdict).toBe('inconclusive');
       expect(spy).toHaveBeenCalledWith(endpoints.proof, expect.objectContaining({
         method: 'GET', credentials: 'omit', cache: 'no-store', redirect: 'error',
       }));

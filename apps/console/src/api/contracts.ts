@@ -143,7 +143,7 @@ export function parseScenarios(value: unknown): Scenarios {
 export const PROOF_SCHEMA = 'firedoor.v06.console-proof.v1' as const;
 export interface ProofSummary {
   schema_version: typeof PROOF_SCHEMA; source_report_schema: 'firedoor.v05.proof-report.v1'; source_report_sha256: string;
-  verdict: 'INCONCLUSIVE'; evidence_status: 'historical_context_only_not_a_proof_chain';
+  verdict: 'inconclusive'; evidence_status: 'historical_context_only_not_a_proof_chain';
   proof_chain_established: false; independently_attested: false; local_consistency_only: true;
   terraform: { receipt_id: string; captured_utc: string; source_sha256: string; add: number; change: number; remove: number; applied: false; evidence_type: 'speculative_plan_not_apply' };
   kubernetes: { cluster: 'firedoor-local'; context: 'kind-firedoor-local'; profile: 'hardened'; captured_utc: string; namespace_count: 3; ready_pod_count: 3; policy_count: 2; evidence_type: 'read_only_snapshot_at_collection_time'; current_read: false };
@@ -171,7 +171,7 @@ export function parseProofSummary(value: unknown): ProofSummary {
     'historical_witnesses', 'limitations'], 'proof_summary');
   eq(v.schema_version, PROOF_SCHEMA, 'proof_summary.schema_version');
   eq(v.source_report_schema, 'firedoor.v05.proof-report.v1', 'proof_summary.source_report_schema');
-  eq(v.verdict, 'INCONCLUSIVE', 'proof_summary.verdict');
+  eq(v.verdict, 'inconclusive', 'proof_summary.verdict');
   eq(v.evidence_status, 'historical_context_only_not_a_proof_chain', 'proof_summary.evidence_status');
   eq(v.proof_chain_established, false, 'proof_summary.proof_chain_established');
   eq(v.independently_attested, false, 'proof_summary.independently_attested');
@@ -232,7 +232,7 @@ export function parseProofSummary(value: unknown): ProofSummary {
   if (!/^TFPLAN-[A-Za-z0-9-]{8,121}$/.test(receiptID)) throw new Error('Invalid plan receipt ID');
   return {
     schema_version: PROOF_SCHEMA, source_report_schema: 'firedoor.v05.proof-report.v1', source_report_sha256: hash(v.source_report_sha256, 'source_report_sha256'),
-    verdict: 'INCONCLUSIVE', evidence_status: 'historical_context_only_not_a_proof_chain',
+    verdict: 'inconclusive', evidence_status: 'historical_context_only_not_a_proof_chain',
     proof_chain_established: false, independently_attested: false, local_consistency_only: true,
     terraform: { receipt_id: receiptID, captured_utc: planTime, source_sha256: hash(plan.source_sha256, 'terraform.source_sha256'),
       add: count(plan.add, 'terraform.add'), change: count(plan.change, 'terraform.change'), remove: count(plan.remove, 'terraform.remove'), applied: false, evidence_type: 'speculative_plan_not_apply' },
