@@ -46,6 +46,14 @@ function object(value: unknown, context: string): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(`${context}: expected object`);
   return value as Record<string, unknown>;
 }
+// Proof responses are intentionally a *minimized* allowlisted JSON shape.
+// Do not silently accept extra raw-evidence fields from a changed backend.
+function exactFields(value: Record<string, unknown>, expected: readonly string[], context: string): void {
+  const allowed = new Set(expected);
+  if (Object.keys(value).length !== allowed.size || Object.keys(value).some((key) => !allowed.has(key))) {
+    throw new Error(`${context}: unexpected or missing fields`);
+  }
+}
 function text(value: unknown, context: string): string {
   if (typeof value !== 'string' || value.length < 1 || value.length > 1000) throw new Error(`${context}: invalid text`);
   return value;
@@ -158,6 +166,9 @@ function utc(value: unknown, label: string): string {
 }
 export function parseProofSummary(value: unknown): ProofSummary {
   const v = object(value, 'proof_summary');
+  exactFields(v, ['schema_version', 'source_report_schema', 'source_report_sha256', 'verdict', 'evidence_status',
+    'proof_chain_established', 'independently_attested', 'local_consistency_only', 'terraform', 'kubernetes',
+    'historical_witnesses', 'limitations'], 'proof_summary');
   eq(v.schema_version, PROOF_SCHEMA, 'proof_summary.schema_version');
   eq(v.source_report_schema, 'firedoor.v05.proof-report.v1', 'proof_summary.source_report_schema');
   eq(v.verdict, 'INCONCLUSIVE', 'proof_summary.verdict');
@@ -166,9 +177,12 @@ export function parseProofSummary(value: unknown): ProofSummary {
   eq(v.independently_attested, false, 'proof_summary.independently_attested');
   eq(v.local_consistency_only, true, 'proof_summary.local_consistency_only');
   const plan = object(v.terraform, 'terraform');
+  exactFields(plan, ['receipt_id', 'captured_utc', 'source_sha256', 'add', 'change', 'remove', 'applied', 'evidence_type'], 'terraform');
   eq(plan.applied, false, 'terraform.applied');
   eq(plan.evidence_type, 'speculative_plan_not_apply', 'terraform.evidence_type');
   const kube = object(v.kubernetes, 'kubernetes');
+  exactFields(kube, ['cluster', 'context', 'profile', 'captured_utc', 'namespace_count', 'ready_pod_count',
+    'policy_count', 'evidence_type', 'current_read'], 'kubernetes');
   eq(kube.cluster, 'firedoor-local', 'kubernetes.cluster');
   eq(kube.context, 'kind-firedoor-local', 'kubernetes.context');
   eq(kube.profile, 'hardened', 'kubernetes.profile');
@@ -181,29 +195,48 @@ export function parseProofSummary(value: unknown): ProofSummary {
   const expectedRoutes = ['data-to-app', 'edge-to-data'];
   const witnesses: ProofSummary['historical_witnesses'] = v.historical_witnesses.map((raw: unknown, i: number) => {
     const w = object(raw, `witness[${i}]`);
+    exactFields(w, ['route_id', 'captured_utc', 'historical_only', 'restoration_verified', 'phases'], `witness[${i}]`);
     eq(w.route_id, expectedRoutes[i], `witness[${i}].route_id`);
     eq(w.historical_only, true, `witness[${i}].historical_only`);
     eq(w.restoration_verified, true, `witness[${i}].restoration_verified`);
     if (!Array.isArray(w.phases) || w.phases.length !== 3) throw new Error('witness phases: invalid sequence');
     const phases = w.phases.map((rawPhase: unknown, j: number) => {
       const phase = object(rawPhase, `phase[${j}]`);
+      exactFields(phase, ['phase', 'observed'], `phase[${j}]`);
+      eq(phase.phase, ['before', 'witness_present', 'restored'][j], `phase[${j}].phase`);
       const observed = j === 1 ? 'reachable' : 'unreachable';
       eq(phase.observed, observed, `phase[${j}].observed`);
-      return { phase: text(phase.phase, 'phase.name'), observed } as const;
+      return { phase: phase.phase as string, observed } as const;
     });
     return { route_id: expectedRoutes[i], captured_utc: utc(w.captured_utc, 'witness.captured_utc'), historical_only: true, restoration_verified: true, phases };
   });
   const limitations = strings(v.limitations, 'proof_summary.limitations');
-  if (limitations.length !== 6) throw new Error('Expected six published report limitations');
+  const expectedLimitations = [
+    'A speculative Terraform plan proposes changes; it does not apply infrastructure or establish Kubernetes enforcement.',
+    'A fresh Kubernetes inventory is a configuration snapshot, not a live network traffic test.',
+    'Historical v0.4 A/B/A HTTP observations predate this plan and are NOT contemporaneous or proof of a single causal chain.',
+    'Restoration and journal checks are local record validations; no historical witness is replayed.',
+    'SHA256 values only detect local inconsistency and are not signatures, remote attestations, or independently authenticated evidence.',
+    'The overall Firedoor Proof Lens security verdict is inconclusive.',
+  ];
+  if (limitations.length !== expectedLimitations.length || limitations.some((entry, i) => entry !== expectedLimitations[i])) {
+    throw new Error('Published historical limitations were modified');
+  }
+  const planTime = utc(plan.captured_utc, 'plan.captured_utc');
+  const observationTime = utc(kube.captured_utc, 'kubernetes.captured_utc');
+  if (Date.parse(observationTime) < Date.parse(planTime) ||
+    witnesses.some((w) => Date.parse(w.captured_utc) >= Date.parse(planTime))) {
+    throw new Error('Historical proof chronology is invalid');
+  }
   const receiptID = text(plan.receipt_id, 'terraform.receipt_id');
-  if (!/^TFPLAN-[A-Za-z0-9-]{8,80}$/.test(receiptID)) throw new Error('Invalid plan receipt ID');
+  if (!/^TFPLAN-[A-Za-z0-9-]{8,121}$/.test(receiptID)) throw new Error('Invalid plan receipt ID');
   return {
     schema_version: PROOF_SCHEMA, source_report_schema: 'firedoor.v05.proof-report.v1', source_report_sha256: hash(v.source_report_sha256, 'source_report_sha256'),
     verdict: 'INCONCLUSIVE', evidence_status: 'historical_context_only_not_a_proof_chain',
     proof_chain_established: false, independently_attested: false, local_consistency_only: true,
-    terraform: { receipt_id: receiptID, captured_utc: utc(plan.captured_utc, 'plan.captured_utc'), source_sha256: hash(plan.source_sha256, 'terraform.source_sha256'),
+    terraform: { receipt_id: receiptID, captured_utc: planTime, source_sha256: hash(plan.source_sha256, 'terraform.source_sha256'),
       add: count(plan.add, 'terraform.add'), change: count(plan.change, 'terraform.change'), remove: count(plan.remove, 'terraform.remove'), applied: false, evidence_type: 'speculative_plan_not_apply' },
-    kubernetes: { cluster: 'firedoor-local', context: 'kind-firedoor-local', profile: 'hardened', captured_utc: utc(kube.captured_utc, 'kubernetes.captured_utc'),
+    kubernetes: { cluster: 'firedoor-local', context: 'kind-firedoor-local', profile: 'hardened', captured_utc: observationTime,
       namespace_count: 3, ready_pod_count: 3, policy_count: 2, evidence_type: 'read_only_snapshot_at_collection_time', current_read: false },
     historical_witnesses: witnesses, limitations,
   };

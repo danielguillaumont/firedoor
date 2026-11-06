@@ -7,6 +7,35 @@ export const endpoints = {
   proof: '/api/v1/proof-summary',
 } as const;
 
+// Bound the opt-in proof response even when the server sends chunked content
+// without Content-Length. A report larger than this is not our minimized API.
+async function readBoundedProof(response: Response): Promise<unknown> {
+  const maxBytes = 32 * 1024;
+  const declared = response.headers.get('Content-Length');
+  if (declared && Number(declared) > maxBytes) throw new Error('Approved proof projection exceeds size limit');
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error('Approved proof response has no body');
+  const decoder = new TextDecoder('utf-8', { fatal: true });
+  let size = 0;
+  let json = '';
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > maxBytes) throw new Error('Approved proof projection exceeds size limit');
+      json += decoder.decode(value, { stream: true });
+    }
+    json += decoder.decode();
+    return JSON.parse(json) as unknown;
+  } catch (error) {
+    await reader.cancel().catch(() => undefined);
+    throw error;
+  } finally {
+    reader.releaseLock();
+  }
+}
+
 export async function getJSON<T>(path: (typeof endpoints)[keyof typeof endpoints], parser: (input: unknown) => T, signal: AbortSignal): Promise<T> {
   const response = await fetch(path, {
     method: 'GET',
@@ -19,7 +48,7 @@ export async function getJSON<T>(path: (typeof endpoints)[keyof typeof endpoints
   if (!response.ok) throw new Error(`API returned HTTP ${response.status}`);
   const contentType = response.headers.get('Content-Type') ?? '';
   if (!contentType.toLowerCase().includes('application/json')) throw new Error('API did not return JSON');
-  return parser(await response.json() as unknown);
+  return parser(path === endpoints.proof ? await readBoundedProof(response) : await response.json() as unknown);
 }
 
 export const loadHealth = (signal: AbortSignal) => getJSON(endpoints.health, parseHealth, signal);

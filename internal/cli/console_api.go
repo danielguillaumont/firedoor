@@ -32,8 +32,35 @@ func newConsoleAPICommand() *cobra.Command {
 	}
 	serve.Flags().BoolVar(&enableApprovedProof, "enable-approved-proof", false, "Opt in to one previously saved, verified, Git-ignored detached JSON summary (no collection)")
 	serve.Flags().StringVar(&consent, "consent", "", "Exact operator approval for importing the fixed local detached report")
-	group.AddCommand(serve)
+	// Inspection is an explicit operator action. It validates the same fixed,
+	// ignored detached JSON as serve, without binding any socket or exporting it.
+	var inspectionConsent string
+	inspect := &cobra.Command{
+		Use: "inspect-approved-proof", Short: "Validate the fixed approved detached JSON without starting an HTTP server",
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error { return inspectConsoleApprovedProof(cmd, inspectionConsent) },
+	}
+	inspect.Flags().StringVar(&inspectionConsent, "consent", "", "Exact operator approval for checking the fixed local detached report")
+	group.AddCommand(serve, inspect)
 	return group
+}
+
+// inspectConsoleApprovedProof intentionally returns a classification only;
+// it never prints paths, evidence content, report hashes or local errors.
+// This is consistency validation, NOT an authentication or origin check.
+func inspectConsoleApprovedProof(cmd *cobra.Command, consent string) error {
+	if consent != prooflens.ConsoleApprovalConsent {
+		return errors.New("explicit local inspection consent required; no report was loaded")
+	}
+	summary, err := prooflens.LoadApprovedConsoleProof(".", consent)
+	if err != nil {
+		return errors.New("approved detached Proof Lens report unavailable or rejected; no HTTP server started")
+	}
+	if summary.Verdict != prooflens.Inconclusive || summary.ProofChainEstablished || summary.IndependentlyAttested || !summary.LocalConsistencyOnly {
+		return errors.New("unexpected detached proof classification; no HTTP server started")
+	}
+	_, err = fmt.Fprintln(cmd.OutOrStdout(), "FIREDOOR v0.6 / DETACHED PROOF PREVIEW CHECK\nPASS: fixed, ignored JSON accepted by local consistency checks.\nVerdict: INCONCLUSIVE / historical context only.\nNo HTTP server started. No original evidence authenticated.")
+	return err
 }
 
 func serveConsoleAPI(cmd *cobra.Command, enableApprovedProof bool, consent string) error {
