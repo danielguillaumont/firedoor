@@ -9,6 +9,8 @@ const caps = { schema_version: SCHEMA, mode: 'offline_contracts_only', limitatio
   { name: 'control_findings', availability: 'not_enabled' },
   { name: 'environment_inventory', availability: 'not_enabled' },
   { name: 'scenario_execution', availability: 'not_enabled' },
+  { name: 'control_catalog', availability: 'available', path: '/api/v1/control-catalog' },
+  { name: 'historical_environment_snapshot', availability: 'not_enabled' },
 ] };
 const names = ['Compromised Workload', 'Identity Overreach', 'Secret Boundary', 'Lateral Movement', 'Privileged Workload Admission'];
 const scenarios = { schema_version: SCHEMA, source: 'versioned_planning_contracts_only', limitations: ['Planning only'], scenarios: names.map((name, i) => ({
@@ -28,8 +30,8 @@ describe('fixed API v0.6 contract gates', () => {
     expect(() => parseHealth({ ...health, schema_version: 'future' })).toThrow();
     expect(() => parseHealth({ status: 'ok' })).toThrow();
   });
-  it('parses six explicit capability states and rejects unguarded proof access', () => {
-    expect(parseCapabilities(caps).capabilities.filter((c) => c.availability === 'available')).toHaveLength(2);
+  it('parses eight explicit capability states and rejects unguarded proof access', () => {
+    expect(parseCapabilities(caps).capabilities.filter((c) => c.availability === 'available')).toHaveLength(3);
     const altered = clone(caps);
     altered.capabilities[2].availability = 'available';
     expect(() => parseCapabilities(altered)).toThrow();
@@ -64,5 +66,29 @@ describe('fixed API v0.6 contract gates', () => {
     const short = clone(scenarios);
     short.scenarios.pop();
     expect(() => parseScenarios(short)).toThrow();
+  });
+});
+
+describe('6D1A control and historical environment capability boundaries', () => {
+  it('advertises catalog definitions but not control findings or live inventory', () => {
+    const result = parseCapabilities(caps);
+    expect(result.capabilities.find((c) => c.name === 'control_catalog')?.path).toBe('/api/v1/control-catalog');
+    expect(result.capabilities.find((c) => c.name === 'control_findings')?.availability).toBe('not_enabled');
+    expect(result.capabilities.find((c) => c.name === 'historical_environment_snapshot')?.availability).toBe('not_enabled');
+    const wrong = clone(caps);
+    wrong.capabilities[6].path = '/api/v1/terraform/apply';
+    expect(() => parseCapabilities(wrong)).toThrow();
+  });
+  it('refuses historical snapshot access without approval and refuses live inventory claims', () => {
+    const enabled = clone(caps);
+    enabled.capabilities[7].availability = 'available';
+    enabled.capabilities[7].path = '/api/v1/environment-snapshot';
+    expect(() => parseCapabilities(enabled)).toThrow();
+    enabled.mode = 'approved_detached_historical_report_read_only';
+    enabled.capabilities[2].availability = 'available';
+    enabled.capabilities[2].path = '/api/v1/proof-summary';
+    expect(parseCapabilities(enabled).capabilities.filter((c) => c.availability === 'available')).toHaveLength(5);
+    enabled.capabilities[4].availability = 'available';
+    expect(() => parseCapabilities(enabled)).toThrow();
   });
 });

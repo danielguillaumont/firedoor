@@ -55,11 +55,11 @@ func TestCapabilitiesExplicitlyDisableEvidenceAndMutation(t *testing.T) {
 	if c.Mode != "offline_contracts_only" || len(c.Limitations) != 2 {
 		t.Fatalf("bad capability scope: %+v", c)
 	}
-	if len(c.Capabilities) != 6 {
+	if len(c.Capabilities) != 8 {
 		t.Fatalf("capability count: %d", len(c.Capabilities))
 	}
 	for _, v := range c.Capabilities {
-		if v.Name == "health" || v.Name == "scenario_contracts" {
+		if v.Name == "health" || v.Name == "scenario_contracts" || v.Name == "control_catalog" {
 			if v.Availability != "available" || v.Path == "" {
 				t.Fatalf("missing read endpoint: %+v", v)
 			}

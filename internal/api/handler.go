@@ -1,6 +1,6 @@
-// Package api provides v0.6's first localhost-only, offline, read-only HTTP
-// contract. It deliberately has no Kubernetes, Terraform, SQLite or filesystem
-// dependencies. No observation or security verdict is inferred from a contract.
+// Package api provides a localhost-only, read-only HTTP contract. It has
+// no Kubernetes clients, Terraform execution, SQLite or filesystem access.
+// No observation or security verdict is inferred from a contract.
 package api
 
 import (
@@ -111,12 +111,12 @@ func newHandler(approvedProof *prooflens.ConsoleProofSummary) http.Handler {
 		}
 		// The optional route does not exist unless explicitly approved at
 		// process startup; even HEAD/OPTIONS must not disclose it by default.
-		if r.URL.Path == "/api/v1/proof-summary" && approvedProof == nil {
+		if (r.URL.Path == "/api/v1/proof-summary" || r.URL.Path == "/api/v1/environment-snapshot") && approvedProof == nil {
 			writeError(w, http.StatusNotFound)
 			return
 		}
 		switch r.URL.Path {
-		case "/api/v1/health", "/api/v1/capabilities", "/api/v1/scenarios", "/api/v1/proof-summary":
+		case "/api/v1/health", "/api/v1/capabilities", "/api/v1/scenarios", "/api/v1/proof-summary", "/api/v1/control-catalog", "/api/v1/environment-snapshot":
 			if r.Method != http.MethodGet {
 				w.Header().Set("Allow", "GET")
 				writeError(w, http.StatusMethodNotAllowed)
@@ -132,10 +132,12 @@ func newHandler(approvedProof *prooflens.ConsoleProofSummary) http.Handler {
 			writeJSON(w, Health{SchemaVersion: SchemaVersion, Service: "firedoor-console-api", Status: "ok", Scope: "local_http_process_only", ClusterChecked: false, EvidenceLoaded: false})
 		case "/api/v1/capabilities":
 			proofCapability := Capability{Name: "proof_reports", Availability: "not_enabled"}
+			environmentCapability := Capability{Name: "historical_environment_snapshot", Availability: "not_enabled"}
 			mode := "offline_contracts_only"
 			limitations := []string{"Health means only the local HTTP process responds; it is not Kubernetes readiness.", "No Terraform, Kubernetes, SQLite, traffic probes, evidence files or security verdicts are accessed."}
 			if approvedProof != nil {
 				proofCapability = Capability{Name: "proof_reports", Path: "/api/v1/proof-summary", Availability: "available"}
+				environmentCapability = Capability{Name: "historical_environment_snapshot", Path: "/api/v1/environment-snapshot", Availability: "available"}
 				mode = "approved_detached_historical_report_read_only"
 				limitations = []string{"Health means only the local HTTP process responds; it is not Kubernetes readiness.", "An explicitly approved detached historical report was validated and loaded at startup only; it does not establish policy enforcement or authenticate original evidence."}
 			}
@@ -148,11 +150,17 @@ func newHandler(approvedProof *prooflens.ConsoleProofSummary) http.Handler {
 					{Name: "control_findings", Availability: "not_enabled"},
 					{Name: "environment_inventory", Availability: "not_enabled"},
 					{Name: "scenario_execution", Availability: "not_enabled"},
+					{Name: "control_catalog", Path: "/api/v1/control-catalog", Availability: "available"},
+					environmentCapability,
 				},
 				Limitations: limitations,
 			})
 		case "/api/v1/proof-summary":
 			writeJSON(w, approvedProof)
+		case "/api/v1/control-catalog":
+			writeJSON(w, controlCatalog())
+		case "/api/v1/environment-snapshot":
+			writeJSON(w, projectHistoricalEnvironment(approvedProof))
 		case "/api/v1/scenarios":
 			writeJSON(w, Scenarios{
 				SchemaVersion: SchemaVersion, Source: "versioned_planning_contracts_only",

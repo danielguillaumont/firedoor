@@ -78,15 +78,15 @@ export function parseHealth(value: unknown): Health {
   return v as unknown as Health;
 }
 
-const availableNames = new Set(['health', 'scenario_contracts']);
-const disabledNames = new Set(['proof_reports', 'control_findings', 'environment_inventory', 'scenario_execution']);
+const availableNames = new Set(['health', 'scenario_contracts', 'control_catalog']);
+const disabledNames = new Set(['proof_reports', 'control_findings', 'environment_inventory', 'scenario_execution', 'historical_environment_snapshot']);
 
 export function parseCapabilities(value: unknown): Capabilities {
   const v = object(value, 'capabilities');
   version(v);
   const approved = v.mode === 'approved_detached_historical_report_read_only';
   if (!approved) eq(v.mode, 'offline_contracts_only', 'capabilities.mode');
-  if (!Array.isArray(v.capabilities) || v.capabilities.length !== 6) throw new Error('capabilities: unexpected count');
+  if (!Array.isArray(v.capabilities) || v.capabilities.length !== 8) throw new Error('capabilities: unexpected count');
   const seen = new Set<string>();
   const capabilities = v.capabilities.map((item: unknown, i: number): Capability => {
     const entry = object(item, `capabilities[${i}]`);
@@ -95,8 +95,11 @@ export function parseCapabilities(value: unknown): Capabilities {
     seen.add(name);
     if (availableNames.has(name)) {
       eq(entry.availability, 'available', `capability.${name}`);
-      const expectedPath = name === 'health' ? '/api/v1/health' : '/api/v1/scenarios';
+      const expectedPath = name === 'health' ? '/api/v1/health' : name === 'scenario_contracts' ? '/api/v1/scenarios' : '/api/v1/control-catalog';
       eq(entry.path, expectedPath, `capability.${name}.path`);
+    } else if (name === 'historical_environment_snapshot' && approved) {
+      eq(entry.availability, 'available', 'capability.historical_environment_snapshot');
+      eq(entry.path, '/api/v1/environment-snapshot', 'capability.historical_environment_snapshot.path');
     } else if (name === 'proof_reports' && approved) {
       eq(entry.availability, 'available', 'capability.proof_reports');
       eq(entry.path, '/api/v1/proof-summary', 'capability.proof_reports.path');

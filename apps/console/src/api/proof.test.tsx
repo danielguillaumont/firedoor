@@ -9,7 +9,7 @@ const fixture = () => ({
   source_report_sha256: 'b'.repeat(64), verdict: 'inconclusive',
   evidence_status: 'historical_context_only_not_a_proof_chain',
   proof_chain_established: false, independently_attested: false, local_consistency_only: true,
-  terraform: { receipt_id: 'TFPLAN-20261105T172235Z-813ff79fe4d0fda4b35cac81', captured_utc: '2026-11-05T17:22:35Z',
+  terraform: { receipt_id: 'TFPLAN-SYNTHETIC-TEST-00000001', captured_utc: '2026-11-05T17:22:35Z',
     source_sha256: 'a'.repeat(64), add: 0, change: 0, remove: 0, applied: false, evidence_type: 'speculative_plan_not_apply' },
   kubernetes: { cluster: 'firedoor-local', context: 'kind-firedoor-local', profile: 'hardened', captured_utc: '2026-11-05T17:25:35Z',
     namespace_count: 3, ready_pod_count: 3, policy_count: 2, evidence_type: 'read_only_snapshot_at_collection_time', current_read: false },
@@ -34,12 +34,14 @@ const approvedCapabilities = () => ({ schema_version: SCHEMA, mode: 'approved_de
     { name: 'control_findings', availability: 'not_enabled' },
     { name: 'environment_inventory', availability: 'not_enabled' },
     { name: 'scenario_execution', availability: 'not_enabled' },
+    { name: 'control_catalog', availability: 'available', path: '/api/v1/control-catalog' },
+    { name: 'historical_environment_snapshot', availability: 'available', path: '/api/v1/environment-snapshot' },
   ] });
 
 describe('approved historical Proof Lens UI and API contracts', () => {
   it('accepts the exact server-advertised approved mode and fixed route', () => {
     const c = parseCapabilities(approvedCapabilities());
-    expect(c.capabilities.filter((a) => a.availability === 'available')).toHaveLength(3);
+    expect(c.capabilities.filter((a) => a.availability === 'available')).toHaveLength(5);
     expect(endpoints.proof).toBe('/api/v1/proof-summary');
   });
   it('rejects unapproved features and arbitrary endpoint paths', () => {

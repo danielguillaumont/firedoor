@@ -59,7 +59,7 @@ function Overview({ health, scenarios, capabilities, retry, navigate }: { health
     <section aria-label="Current API facts" className="metrics-grid">
       <MetricCard label="Local process" value={health.state === 'ready' ? 'ONLINE' : health.state === 'error' ? 'OFFLINE' : '—'} detail="API response, not cluster health" tone={health.state === 'ready' ? 'metric-online' : ''}/>
       <MetricCard label="Scenario contracts" value={scenarioCount === undefined ? '—' : String(scenarioCount).padStart(2, '0')} detail="Planning contracts, not executed runs"/>
-      <MetricCard label="Available API capabilities" value={activeCount === undefined ? '—' : String(activeCount).padStart(2, '0')} detail="Fixed offline metadata endpoints"/>
+      <MetricCard label="Available API capabilities" value={activeCount === undefined ? '—' : String(activeCount).padStart(2, '0')} detail="Read-only contracts; historical routes require approval"/>
     </section>
     {(health.state === 'error' || scenarios.state === 'error' || capabilities.state === 'error') && <RetryError title="Some local API data could not be loaded" onRetry={retry}/>}
     <div className="overview-grid">
@@ -87,6 +87,7 @@ function ScenarioView({ data, retry }: { data: Remote<Scenarios>; retry: () => v
 const capabilityLabels: Record<string, string> = {
   health: 'API process health', scenario_contracts: 'Scenario planning contracts', proof_reports: 'Proof Lens reports',
   control_findings: 'Control findings', environment_inventory: 'Environment inventory', scenario_execution: 'Scenario execution',
+  control_catalog: 'Control definition catalog (not evaluated)', historical_environment_snapshot: 'Approved historical environment snapshot',
 };
 
 function CapabilitiesView({ data, retry }: { data: Remote<Capabilities>; retry: () => void }) {
