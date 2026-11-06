@@ -1,7 +1,7 @@
 # Firedoor v0.6 — Slice 6D2: Controls + Environment screens
 
-**Branch:** `feat/v06-console`  
-**Base:** `c01cb6f` (6D1A committed)  
+**Branch:** `feat/v06-console`
+**Base:** `c01cb6f` (6D1A committed)
 **Scope:** React UI, bounded HTTP clients, strict validators and tests. No Go API changes.
 
 ## Controls — Go definitions, not findings
