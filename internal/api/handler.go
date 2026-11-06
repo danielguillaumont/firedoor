@@ -166,7 +166,10 @@ func newHandler(approvedProof *prooflens.ConsoleProofSummary) http.Handler {
 			writeJSON(w, projectHistoricalEnvironment(approvedProof))
 		case "/api/v1/historical-activity":
 			activity, err := projectHistoricalActivity(approvedProof)
-			if err != nil { writeError(w, http.StatusNotFound); return }
+			if err != nil {
+				writeError(w, http.StatusNotFound)
+				return
+			}
 			writeJSON(w, activity)
 		case "/api/v1/scenarios":
 			writeJSON(w, Scenarios{
