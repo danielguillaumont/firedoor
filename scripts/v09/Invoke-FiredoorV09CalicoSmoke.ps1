@@ -7,7 +7,8 @@
   touching Docker or Kubernetes. -Execute requires its exact SHA-256, creates
   only a uniquely named kind cluster with isolated kubeconfig, installs Calico,
   verifies CNI/node readiness and deletes the cluster in finally.
-  CNI readiness is NOT proof of NetworkPolicy enforcement.
+  -VerifyNetworkPolicy adds a fixed ingress-only policy test to positive controls.
+  CNI readiness alone is NOT proof of NetworkPolicy enforcement.
   Windows PowerShell 5.1. Never runs Terraform or changes firedoor-local.
   Forced termination or host failure can prevent cleanup.
 #>
@@ -16,6 +17,7 @@ param(
     [switch]$Execute,
     [switch]$PrepareManifest,
     [switch]$VerifyLiveBaseline,
+    [switch]$VerifyNetworkPolicy,
     [string]$CalicoManifestSha256 = ""
 )
 
@@ -30,6 +32,8 @@ $manifestUri = "https://raw.githubusercontent.com/projectcalico/calico/v3.33.0/m
 $manifestPath = Join-Path $HOME "Downloads\Firedoor-Calico-v3.33.0.yaml"
 $baselineManifest = Join-Path $repo "infrastructure\kind\v09c1-positive-baseline.yaml"
 $baselineNamespace = "firedoor-v09c1"
+$networkPolicyManifest = Join-Path $repo "infrastructure\kind\v09c2-trusted-ingress-policy.yaml"
+$networkPolicySha256 = "ac790a7ec55628d871399c884a8e3c205790a3df8ef6b5a4f11d2c7ad12b2bb4"
 $nonce = ([guid]::NewGuid().ToString("N")).Substring(0, 12)
 $name = "firedoor-v09-$nonce"
 $context = "kind-$name"
@@ -141,6 +145,88 @@ function Assert-BaselineManifestText([string]$Text) {
     }
 }
 
+# A fixed, hash-sealed fixture. No user-selectable policy path is accepted.
+# The exact bytes are checked before creating any cluster.
+function Assert-NetworkPolicyFixture([string]$Path, [string]$ExpectedSha256) {
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        throw 'Expected v0.9C2 NetworkPolicy fixture missing. Stop.'
+    }
+    # Hash canonical UTF-8/LF text: Git can write CRLF on Windows checkout.
+    $content = ([IO.File]::ReadAllText($Path) -replace "`r`n", "`n")
+    $sha = [Security.Cryptography.SHA256]::Create()
+    try {
+        $bytes = [Text.Encoding]::UTF8.GetBytes($content)
+        $digestBytes = $sha.ComputeHash($bytes)
+        $actualSha256 = -join @($digestBytes | ForEach-Object { $_.ToString('x2') })
+    }
+    finally { $sha.Dispose() }
+    if ($actualSha256 -ine $ExpectedSha256) {
+        throw 'Unexpected v0.9C2 NetworkPolicy fixture contents. Stop.'
+    }
+}
+
+# Query from INSIDE the named Pod. A wget failure is returned as data while
+# kubectl/pod-exec errors still fail the harness, rather than masquerading as
+# a successful policy denial. The URL is generated only from verified pods.
+function Get-InPodWgetExit([string]$Client, [string]$Url) {
+    if (@('trusted-client', 'edge-client') -cnotcontains $Client -or
+        $Url -notmatch '^http://(?:data\.firedoor-v09c1\.svc\.cluster\.local|(?:[0-9]{1,3}\.){3}[0-9]{1,3}):8080/$') {
+        throw 'Unexpected network probe identity or URL. Stop.'
+    }
+    # Shell process exits successfully only after reporting the wget code;
+    # kubectl exec itself must succeed. No arbitrary command input is accepted.
+    $shell = 'wget -q -T 5 -O - ' + $Url + ' >/dev/null 2>&1; echo FIREDOOR_WGET_EXIT=$?'
+    $lines = @(& kubectl --kubeconfig $kubeconfig --context $context `
+        --request-timeout=25s -n $baselineNamespace `
+        exec $Client -- sh -c $shell)
+    Assert-LastExit "kubectl pod exec for $Client"
+    $text = ($lines -join "`n").Trim()
+    if ($text -match '^FIREDOOR_WGET_EXIT=([0-9]{1,3})$') {
+        return [int]$Matches[1]
+    }
+    throw "Ambiguous in-pod wget outcome for $Client. Stop."
+}
+
+function Assert-TracedSuccess([string]$Client, [string]$Url) {
+    # Use the established 9C1 exact response-body positive control, not just
+    # a TCP success code.
+    $reply = @(& kubectl --kubeconfig $kubeconfig --context $context `
+        --request-timeout=30s -n $baselineNamespace `
+        exec $Client -- wget -q -T 8 -O - $Url)
+    if ($LASTEXITCODE -ne 0 -or ($reply -join "`n").Trim() -cne 'FIREDOOR_V09C1_DATA_OK') {
+        throw "Healthy authorized client failed: $Client -> $Url. Stop."
+    }
+}
+
+function Wait-EdgeBlocked([string]$Url) {
+    # Kubernetes does not expose a policy-propagated condition. Allow bounded
+    # convergence, requiring fresh connections and ongoing positive controls.
+    for ($attempt = 1; $attempt -le 8; $attempt++) {
+        Assert-TracedSuccess 'trusted-client' $Url
+        $code = Get-InPodWgetExit 'edge-client' $Url
+        if ($code -ne 0) {
+            # Recheck authorized request: server still responds with the marker.
+            Assert-TracedSuccess 'trusted-client' $Url
+            return
+        }
+        if ($attempt -lt 8) { Start-Sleep -Seconds 4 }
+    }
+    throw "Policy did not block edge-client -> $Url after bounded retries. Stop."
+}
+
+function Wait-EdgeRestored([string]$Url) {
+    for ($attempt = 1; $attempt -le 8; $attempt++) {
+        $reply = @(& kubectl --kubeconfig $kubeconfig --context $context `
+            --request-timeout=25s -n $baselineNamespace `
+            exec edge-client -- wget -q -T 5 -O - $Url)
+        if ($LASTEXITCODE -eq 0 -and ($reply -join "`n").Trim() -ceq 'FIREDOOR_V09C1_DATA_OK') {
+            return
+        }
+        if ($attempt -lt 8) { Start-Sleep -Seconds 3 }
+    }
+    throw "Edge connectivity did not recover after policy removal: $Url. Stop."
+}
+
 function Assert-IsolatedKubeconfig([string]$Path, [string]$ExpectedContext) {
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
         throw "Dedicated kubeconfig missing. Stop."
@@ -157,6 +243,12 @@ function Assert-IsolatedKubeconfig([string]$Path, [string]$ExpectedContext) {
     }
 }
 
+if ($VerifyLiveBaseline -and $VerifyNetworkPolicy) {
+    throw 'Select exactly one live verification mode. Stop.'
+}
+if ($VerifyNetworkPolicy -and -not $Execute) {
+    throw 'The live NetworkPolicy verification requires explicit -Execute. Stop.'
+}
 if ($VerifyLiveBaseline -and -not $Execute) {
     throw 'The live workload baseline requires explicit -Execute. Stop.'
 }
@@ -179,7 +271,10 @@ if ($manifestFull.StartsWith($repoPrefix, [StringComparison]::OrdinalIgnoreCase)
     throw "Calico manifest must not be inside source repository. Stop."
 }
 
-if ($VerifyLiveBaseline) {
+if ($VerifyNetworkPolicy) {
+    Assert-NetworkPolicyFixture $networkPolicyManifest $networkPolicySha256
+}
+if ($VerifyLiveBaseline -or $VerifyNetworkPolicy) {
     if (-not (Test-Path -LiteralPath $baselineManifest -PathType Leaf)) {
         throw 'Expected v0.9C1 workload manifest missing. Stop.'
     }
@@ -195,7 +290,7 @@ if (-not $Execute -and -not $PrepareManifest) {
     Write-Host "Calico release: $calicoVersion (official version-pinned upstream manifest)"
     Write-Host "Manifest location: $manifestPath"
     Write-Host "-PrepareManifest downloads that manifest; -Execute requires its SHA-256."
-    Write-Host "No Terraform, NetworkPolicy tests, or existing-cluster changes."
+    Write-Host "No Terraform or existing-cluster changes. NetworkPolicy test only with -Execute -VerifyNetworkPolicy."
     return
 }
 
@@ -341,7 +436,7 @@ try {
     Write-Host 'PASS: Calico DaemonSet ready (2/2), both kind nodes Ready.'
     Write-Host 'LIMIT: CNI readiness alone is NOT live NetworkPolicy enforcement proof.'
 
-    if ($VerifyLiveBaseline) {
+    if ($VerifyLiveBaseline -or $VerifyNetworkPolicy) {
         # This namespace exists only in this freshly created, identity-checked cluster.
         # There must be NO policy: this is a positive-control test, not denial proof.
         Write-Host "Creating fixed positive-control workloads in $baselineNamespace only."
@@ -405,7 +500,86 @@ try {
             }
         }
         Write-Host 'PASS: 9C1 positive baseline (4/4 HTTP checks) verified.'
-        Write-Host 'LIMITATION: No denied traffic or NetworkPolicy enforcement was tested.'
+        if ($VerifyNetworkPolicy) {
+            # This is a single fixed ingress-only rule. Verify the policy API
+            # interpretation rather than trusting kubectl create alone.
+            Write-Host 'Creating hash-sealed allow-trusted-to-data NetworkPolicy.'
+            & kubectl --kubeconfig $kubeconfig --context $context `
+                --request-timeout=45s create -f $networkPolicyManifest
+            Assert-LastExit 'Create trusted ingress NetworkPolicy'
+
+            $npText = @(& kubectl --kubeconfig $kubeconfig --context $context `
+                --request-timeout=30s -n $baselineNamespace get networkpolicies -o json)
+            Assert-LastExit 'Inspect installed NetworkPolicy set'
+            try { $npItems = ($npText -join "`n") | ConvertFrom-Json -ErrorAction Stop }
+            catch { throw 'Invalid installed NetworkPolicy JSON. Stop.' }
+            if (@($npItems.items).Count -ne 1 -or
+                $npItems.items[0].metadata.name -cne 'allow-trusted-to-data') {
+                throw 'Unexpected live NetworkPolicy set. Stop.'
+            }
+            $spec = $npItems.items[0].spec
+            $peer = $spec.ingress[0].from[0]
+            # StrictMode rejects missing optional JSON properties, so inspect
+            # property dictionaries for omitted fields instead.
+            if ($spec.podSelector.matchLabels.app -cne 'data-server' -or
+                @($spec.policyTypes).Count -ne 1 -or $spec.policyTypes[0] -cne 'Ingress' -or
+                @($spec.ingress).Count -ne 1 -or
+                @($spec.ingress[0].from).Count -ne 1 -or
+                $spec.ingress[0].from[0].podSelector.matchLabels.role -cne 'trusted' -or
+                @($spec.ingress[0].ports).Count -ne 1 -or
+                $spec.ingress[0].ports[0].protocol -cne 'TCP' -or
+                $spec.ingress[0].ports[0].port -ne 8080 -or
+                $null -ne $peer.PSObject.Properties['namespaceSelector'] -or
+                $null -ne $peer.PSObject.Properties['ipBlock'] -or
+                $null -ne $spec.PSObject.Properties['egress']) {
+                throw 'Observed NetworkPolicy does not match intended ingress-only rule. Stop.'
+            }
+            Write-Host 'PASS: Kubernetes API confirms exactly one trusted-only ingress policy.'
+
+            # Negative check MUST be compared against a working destination.
+            # Post-policy requests are fresh TCP connections; policy propagation
+            # is asynchronous, so permit a bounded convergence window.
+            foreach ($url in @(
+                'http://data.firedoor-v09c1.svc.cluster.local:8080/',
+                "http://${targetIP}:8080/"
+            )) {
+                Wait-EdgeBlocked $url
+                Write-Host "PASS: edge-client blocked while trusted-client HTTP marker remains healthy: $url"
+            }
+            # Also prove the denied source can still be reached through kubectl.
+            $edgeEcho = @(& kubectl --kubeconfig $kubeconfig --context $context `
+                --request-timeout=20s -n $baselineNamespace exec edge-client -- echo FIREDOOR_EDGE_EXEC_OK)
+            Assert-LastExit 'Edge-client process health probe'
+            if (($edgeEcho -join "`n").Trim() -cne 'FIREDOOR_EDGE_EXEC_OK') {
+                throw 'Edge client is not responding to exec; denial is inconclusive. Stop.'
+            }
+            Write-Host 'PASS: Edge-client remains executable; denied traffic is not an absent pod.'
+
+            & kubectl --kubeconfig $kubeconfig --context $context `
+                --request-timeout=45s delete -f $networkPolicyManifest
+            Assert-LastExit 'Remove trusted ingress NetworkPolicy'
+            $afterText = @(& kubectl --kubeconfig $kubeconfig --context $context `
+                --request-timeout=30s -n $baselineNamespace get networkpolicies -o json)
+            Assert-LastExit 'Inspect NetworkPolicy absence after delete'
+            try { $afterPol = ($afterText -join "`n") | ConvertFrom-Json -ErrorAction Stop }
+            catch { throw 'Invalid post-delete NetworkPolicy JSON. Stop.' }
+            if (@($afterPol.items).Count -ne 0) {
+                throw 'NetworkPolicy still exists after deletion. Stop.'
+            }
+            foreach ($url in @(
+                'http://data.firedoor-v09c1.svc.cluster.local:8080/',
+                "http://${targetIP}:8080/"
+            )) {
+                Wait-EdgeRestored $url
+                Assert-TracedSuccess 'trusted-client' $url
+                Write-Host "PASS: edge-client recovered and trusted-client stayed healthy: $url"
+            }
+            Write-Host 'PASS: v0.9C2 protected boundary and removal recovery validated.'
+            Write-Host 'LIMITATION: This is local kind/Calico behavioral evidence, not yet CI gating or drift detection.'
+        }
+        else {
+            Write-Host 'LIMITATION: No denied traffic or NetworkPolicy enforcement was tested.'
+        }
     }
     $completed = $true
 }
@@ -435,7 +609,11 @@ finally {
     }
 }
 if (-not $completed -or -not $cleanupSuccess) { throw 'CNI smoke or cleanup incomplete. Stop.' }
-if ($VerifyLiveBaseline) {
+if ($VerifyNetworkPolicy) {
+    Write-Host 'PASS: Firedoor v0.9C2 live allow/deny/recovery and cleanup.'
+    Write-Host 'NOTE: No Terraform apply or CI enforcement gate executed.'
+}
+elseif ($VerifyLiveBaseline) {
     Write-Host 'PASS: Firedoor v0.9C1 live positive baseline and cleanup.'
     Write-Host 'NOTE: No Terraform apply or NetworkPolicy enforcement denial checks were run.'
 }
