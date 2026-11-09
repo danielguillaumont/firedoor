@@ -82,6 +82,6 @@ func newProofCommand() *cobra.Command {
 	report.Flags().StringVar(&consent, "consent", "", "Exact approval for read-only local evidence access")
 	report.Flags().StringVar(&format, "format", "text", "text, markdown or json")
 	report.Flags().BoolVar(&export, "export-markdown", false, "Create the one fixed Git-ignored Markdown report only (never overwrite)")
-	proof.AddCommand(report)
+	proof.AddCommand(report, newBoundaryProofExportCommand())
 	return proof
 }
