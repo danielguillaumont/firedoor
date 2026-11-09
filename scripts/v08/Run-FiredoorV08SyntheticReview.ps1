@@ -1,11 +1,15 @@
 #requires -Version 5.1
 # Optional opt-in preview. NOT part of CI or source validation.
+param(
+    [ValidatePattern('^Firedoor-v08-Synthetic-Review(?:-[A-Za-z0-9-]{1,32})?$')]
+    [string]$ReviewFolder = 'Firedoor-v08-Synthetic-Review'
+)
 $ErrorActionPreference = 'Stop'
 Set-Location (Resolve-Path (Join-Path $PSScriptRoot '..\..'))
 $branch = (git branch --show-current).Trim()
 if (@('feat/v08-proofs', 'main') -notcontains $branch) { throw 'Unexpected branch. Stop.' }
 if (@(git ls-files -- docs/evidence/local).Count -ne 0) { throw 'Private evidence tracked. Stop.' }
-$dir = Join-Path $HOME 'Downloads\Firedoor-v08-Synthetic-Review'
+$dir = Join-Path (Join-Path $HOME 'Downloads') $ReviewFolder
 if (Test-Path -LiteralPath $dir) {
     throw 'Review output already exists. This demo never overwrites a folder. Stop.'
 }
