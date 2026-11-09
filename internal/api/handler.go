@@ -116,7 +116,7 @@ func newHandler(approvedProof *prooflens.ConsoleProofSummary) http.Handler {
 			return
 		}
 		switch r.URL.Path {
-		case "/api/v1/health", "/api/v1/capabilities", "/api/v1/scenarios", "/api/v1/proof-summary", "/api/v1/control-catalog", "/api/v1/environment-snapshot", "/api/v1/historical-activity":
+		case "/api/v1/health", "/api/v1/capabilities", "/api/v1/scenarios", "/api/v1/proof-summary", "/api/v1/control-catalog", "/api/v1/environment-snapshot", "/api/v1/historical-activity", "/api/v1/containment-map/baseline", "/api/v1/containment-map/hardened":
 			if r.Method != http.MethodGet {
 				w.Header().Set("Allow", "GET")
 				writeError(w, http.StatusMethodNotAllowed)
@@ -128,6 +128,10 @@ func newHandler(approvedProof *prooflens.ConsoleProofSummary) http.Handler {
 		}
 
 		switch r.URL.Path {
+		case "/api/v1/containment-map/baseline":
+			writeDeclaredContainmentMap(w, "baseline")
+		case "/api/v1/containment-map/hardened":
+			writeDeclaredContainmentMap(w, "hardened")
 		case "/api/v1/health":
 			writeJSON(w, Health{SchemaVersion: SchemaVersion, Service: "firedoor-console-api", Status: "ok", Scope: "local_http_process_only", ClusterChecked: false, EvidenceLoaded: false})
 		case "/api/v1/capabilities":

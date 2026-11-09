@@ -100,6 +100,7 @@ func serveConsoleAPI(cmd *cobra.Command, enableApprovedProof bool, consent strin
 		banner += fmt.Sprintf("GET http://%s/api/v1/proof-summary (approved detached historical summary only)\nGET http://%s/api/v1/environment-snapshot (historical, not live)\nGET http://%s/api/v1/historical-activity (not run history or drift proof)\n", api.ListenAddress, api.ListenAddress, api.ListenAddress)
 	}
 	banner += fmt.Sprintf("GET http://%s/api/v1/control-catalog (definitions only, not findings)\n", api.ListenAddress)
+	banner += fmt.Sprintf("GET http://%s/api/v1/containment-map/baseline (planning zones only)\nGET http://%s/api/v1/containment-map/hardened (planning zones only)\n", api.ListenAddress, api.ListenAddress)
 	banner += "No Terraform, Kubernetes, SQLite, or proof collection. Ctrl+C to stop.\n"
 	if _, err := fmt.Fprint(cmd.OutOrStdout(), banner); err != nil {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
