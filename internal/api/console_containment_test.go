@@ -119,14 +119,14 @@ func TestV07DeclaredMapsRemainPlanningOnlyWhenHistoricalProofApproved(t *testing
 		}
 	}
 	// Existing v0.6 capabilities are deliberately unchanged in 7C1. The
-	// frontend still validates exactly nine names, and 7C2/7D will migrate
-	// both sides together rather than breaking the v0.6 console.
+	// frontend now validates ten names after 7E2A. The new historical route is
+	// separately approved and cannot contaminate the planning map.
 	caps := request(http.MethodGet, "/api/v1/capabilities", "127.0.0.1:8787", "")
 	var c Capabilities
 	if err := json.Unmarshal(caps.Body.Bytes(), &c); err != nil {
 		t.Fatal(err)
 	}
-	if len(c.Capabilities) != 9 {
+	if len(c.Capabilities) != 10 {
 		t.Fatalf("changed v0.6 frontend capability contract: %d", len(c.Capabilities))
 	}
 }

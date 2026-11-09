@@ -93,13 +93,13 @@ function ScenarioView({ data, retry }: { data: Remote<Scenarios>; retry: () => v
 const capabilityLabels: Record<string, string> = {
   health: 'API process health', scenario_contracts: 'Scenario planning contracts', proof_reports: 'Proof Lens reports',
   control_findings: 'Control findings', environment_inventory: 'Environment inventory', scenario_execution: 'Scenario execution',
-  control_catalog: 'Control definition catalog (not evaluated)', historical_environment_snapshot: 'Approved historical environment snapshot', historical_activity: 'Approved historical activity (not execution runs)',
+  control_catalog: 'Control definition catalog (not evaluated)', historical_environment_snapshot: 'Approved historical environment snapshot', historical_activity: 'Approved historical activity (not execution runs)', historical_containment_map: 'Saved v0.3 network observations (historical only)',
 };
 
 function CapabilitiesView({ data, retry }: { data: Remote<Capabilities>; retry: () => void }) {
   return <><div className="title-row"><div><SectionLabel>System / API contract</SectionLabel><h1>Capability <em>register.</em></h1><p className="lede">A precise record of what the localhost API currently makes available, and what remains disabled.</p></div></div>
     {data.state === 'error' && <RetryError title="Capability register unavailable" onRetry={retry}/>}
-    <section className="panel capability-panel"><div className="panel-head"><div><SectionLabel>Runtime feature flags</SectionLabel><h2>Current availability</h2></div><span className="status-pill status-muted">{data.data?.mode === 'approved_detached_historical_report_read_only' ? 'Approved historical mode' : 'Offline contracts only'}</span></div>
+    <section className="panel capability-panel"><div className="panel-head"><div><SectionLabel>Runtime feature flags</SectionLabel><h2>Current availability</h2></div><span className="status-pill status-muted">{data.data?.mode === 'approved_detached_historical_report_read_only' ? 'Approved historical report' : data.data?.mode === 'approved_v07_historical_map_read_only' ? 'Approved historical map' : 'Offline contracts only'}</span></div>
       {data.data ? data.data.capabilities.map((item) => <div className="capability-row" key={item.name}><div className={`cap-icon ${item.availability === 'available' ? 'cap-icon-on' : ''}`}><Icon name={item.availability === 'available' ? 'check' : 'lock'} size={18}/></div><div><strong>{capabilityLabels[item.name] ?? item.name}</strong><small>{item.path ?? 'No HTTP route exposed'}</small></div><span className={`status-pill ${item.availability === 'available' ? 'status-available' : 'status-muted'}`}>{item.availability === 'available' ? 'Available' : 'Not enabled'}</span></div>) : <div className="panel-empty">{data.state === 'loading' ? 'Reading capability contract…' : 'No capability data available.'}</div>}
     </section><div className="notice secondary"><Icon name="shield" size={19}/><div><strong>Runtime boundary</strong><span>Actions cannot be enabled by changing this UI. Terraform and Kubernetes mutations remain outside the console API.</span></div></div>
   </>;

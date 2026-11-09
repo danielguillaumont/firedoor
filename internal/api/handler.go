@@ -5,9 +5,11 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 
+	"github.com/danielguillaumont/firedoor/internal/containmentmap"
 	"github.com/danielguillaumont/firedoor/internal/prooflens"
 	"github.com/danielguillaumont/firedoor/pkg/models"
 )
@@ -69,7 +71,7 @@ func fixedScenarioContracts() []Scenario {
 // NewHandler is deterministic and pure: it accesses no files, processes,
 // stores, cluster clients, or outbound network resources. Host and Origin
 // checks reduce browser DNS rebinding and cross-site request exposure.
-func NewHandler() http.Handler { return newHandler(nil) }
+func NewHandler() http.Handler { return newHandler(nil, nil) }
 
 // NewHandlerWithApprovedProof uses an already checked in-memory 6C1 view.
 // Only the explicit CLI import path may choose to provide this view; the
@@ -85,10 +87,24 @@ func NewHandlerWithApprovedProof(proof *prooflens.ConsoleProofSummary) http.Hand
 	for i := range snapshot.HistoricalWitnesses {
 		snapshot.HistoricalWitnesses[i].Phases = append([]prooflens.ConsoleWitnessPhase(nil), proof.HistoricalWitnesses[i].Phases...)
 	}
-	return newHandler(&snapshot)
+	return newHandler(&snapshot, nil)
 }
 
-func newHandler(approvedProof *prooflens.ConsoleProofSummary) http.Handler {
+// NewHandlerWithApprovedHistoricalMap is the isolated historical-only API mode.
+// It accepts a minimized, bounded preflight projection, never the source JSON.
+// The serving handler owns a snapshot and performs no filesystem reads.
+func NewHandlerWithApprovedHistoricalMap(input *containmentmap.Map) (http.Handler, error) {
+	if input == nil {
+		return nil, fmt.Errorf("historical map was not approved")
+	}
+	safe, err := containmentmap.PrepareHistoricalHTTPProjection(*input)
+	if err != nil {
+		return nil, fmt.Errorf("historical map is outside the reviewed contract")
+	}
+	return newHandler(nil, &safe), nil
+}
+
+func newHandler(approvedProof *prooflens.ConsoleProofSummary, historicalMap *containmentmap.Map) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
@@ -115,8 +131,12 @@ func newHandler(approvedProof *prooflens.ConsoleProofSummary) http.Handler {
 			writeError(w, http.StatusNotFound)
 			return
 		}
+		if r.URL.Path == "/api/v1/containment-map/historical" && historicalMap == nil {
+			writeError(w, http.StatusNotFound)
+			return
+		}
 		switch r.URL.Path {
-		case "/api/v1/health", "/api/v1/capabilities", "/api/v1/scenarios", "/api/v1/proof-summary", "/api/v1/control-catalog", "/api/v1/environment-snapshot", "/api/v1/historical-activity", "/api/v1/containment-map/baseline", "/api/v1/containment-map/hardened":
+		case "/api/v1/health", "/api/v1/capabilities", "/api/v1/scenarios", "/api/v1/proof-summary", "/api/v1/control-catalog", "/api/v1/environment-snapshot", "/api/v1/historical-activity", "/api/v1/containment-map/baseline", "/api/v1/containment-map/hardened", "/api/v1/containment-map/historical":
 			if r.Method != http.MethodGet {
 				w.Header().Set("Allow", "GET")
 				writeError(w, http.StatusMethodNotAllowed)
@@ -132,12 +152,15 @@ func newHandler(approvedProof *prooflens.ConsoleProofSummary) http.Handler {
 			writeDeclaredContainmentMap(w, "baseline")
 		case "/api/v1/containment-map/hardened":
 			writeDeclaredContainmentMap(w, "hardened")
+		case "/api/v1/containment-map/historical":
+			writeJSON(w, historicalMap)
 		case "/api/v1/health":
 			writeJSON(w, Health{SchemaVersion: SchemaVersion, Service: "firedoor-console-api", Status: "ok", Scope: "local_http_process_only", ClusterChecked: false, EvidenceLoaded: false})
 		case "/api/v1/capabilities":
 			proofCapability := Capability{Name: "proof_reports", Availability: "not_enabled"}
 			environmentCapability := Capability{Name: "historical_environment_snapshot", Availability: "not_enabled"}
 			historyCapability := Capability{Name: "historical_activity", Availability: "not_enabled"}
+			historicalMapCapability := Capability{Name: "historical_containment_map", Availability: "not_enabled"}
 			mode := "offline_contracts_only"
 			limitations := []string{"Health means only the local HTTP process responds; it is not Kubernetes readiness.", "No Terraform, Kubernetes, SQLite, traffic probes, evidence files or security verdicts are accessed."}
 			if approvedProof != nil {
@@ -146,6 +169,11 @@ func newHandler(approvedProof *prooflens.ConsoleProofSummary) http.Handler {
 				historyCapability = Capability{Name: "historical_activity", Path: "/api/v1/historical-activity", Availability: "available"}
 				mode = "approved_detached_historical_report_read_only"
 				limitations = []string{"Health means only the local HTTP process responds; it is not Kubernetes readiness.", "An explicitly approved detached historical report was validated and loaded at startup only; it does not establish policy enforcement or authenticate original evidence."}
+			}
+			if historicalMap != nil {
+				historicalMapCapability = Capability{Name: "historical_containment_map", Path: "/api/v1/containment-map/historical", Availability: "available"}
+				mode = "approved_v07_historical_map_read_only"
+				limitations = []string{"Health means only the local HTTP process responds; it is not Kubernetes readiness.", "An explicitly selected saved v0.3 network suite was checked once at startup. Its origin and profile are not independently authenticated. Reachability does not prove policy enforcement."}
 			}
 			writeJSON(w, Capabilities{
 				SchemaVersion: SchemaVersion, Mode: mode,
@@ -159,6 +187,7 @@ func newHandler(approvedProof *prooflens.ConsoleProofSummary) http.Handler {
 					{Name: "control_catalog", Path: "/api/v1/control-catalog", Availability: "available"},
 					environmentCapability,
 					historyCapability,
+					historicalMapCapability,
 				},
 				Limitations: limitations,
 			})

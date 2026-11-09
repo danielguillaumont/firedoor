@@ -53,6 +53,7 @@ describe('6D3A minimized, approved historical timeline', () => {
         { name: 'control_catalog', path: '/api/v1/control-catalog', availability: 'available' },
         { name: 'historical_environment_snapshot', availability: 'not_enabled' },
         { name: 'historical_activity', availability: 'not_enabled' },
+        { name: 'historical_containment_map', availability: 'not_enabled' },
       ],
     };
     expect(parseCapabilities(caps).capabilities[8].availability).toBe('not_enabled');

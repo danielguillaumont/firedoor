@@ -47,6 +47,7 @@ const capabilitiesFixture = (approved: boolean) => parseCapabilities({
       : { name: 'historical_environment_snapshot', availability: 'not_enabled' },
     approved ? { name: 'historical_activity', availability: 'available', path: '/api/v1/historical-activity' }
       : { name: 'historical_activity', availability: 'not_enabled' },
+      { name: 'historical_containment_map', availability: 'not_enabled' },
   ],
 });
 const copy = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T;

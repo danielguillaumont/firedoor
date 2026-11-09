@@ -55,7 +55,7 @@ func TestCapabilitiesExplicitlyDisableEvidenceAndMutation(t *testing.T) {
 	if c.Mode != "offline_contracts_only" || len(c.Limitations) != 2 {
 		t.Fatalf("bad capability scope: %+v", c)
 	}
-	if len(c.Capabilities) != 9 {
+	if len(c.Capabilities) != 10 {
 		t.Fatalf("capability count: %d", len(c.Capabilities))
 	}
 	for _, v := range c.Capabilities {

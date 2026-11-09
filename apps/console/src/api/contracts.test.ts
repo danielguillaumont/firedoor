@@ -12,6 +12,7 @@ const caps = { schema_version: SCHEMA, mode: 'offline_contracts_only', limitatio
   { name: 'control_catalog', availability: 'available', path: '/api/v1/control-catalog' },
   { name: 'historical_environment_snapshot', availability: 'not_enabled' },
   { name: 'historical_activity', availability: 'not_enabled' },
+  { name: 'historical_containment_map', availability: 'not_enabled' },
 ] };
 const names = ['Compromised Workload', 'Identity Overreach', 'Secret Boundary', 'Lateral Movement', 'Privileged Workload Admission'];
 const scenarios = { schema_version: SCHEMA, source: 'versioned_planning_contracts_only', limitations: ['Planning only'], scenarios: names.map((name, i) => ({
@@ -31,7 +32,7 @@ describe('fixed API v0.6 contract gates', () => {
     expect(() => parseHealth({ ...health, schema_version: 'future' })).toThrow();
     expect(() => parseHealth({ status: 'ok' })).toThrow();
   });
-  it('parses nine explicit capability states and rejects unguarded proof access', () => {
+  it('parses ten explicit capability states and rejects unguarded proof access', () => {
     expect(parseCapabilities(caps).capabilities.filter((c) => c.availability === 'available')).toHaveLength(3);
     const altered = clone(caps);
     altered.capabilities[2].availability = 'available';
@@ -39,6 +40,16 @@ describe('fixed API v0.6 contract gates', () => {
     const unknown = clone(caps);
     unknown.capabilities[2].name = 'terraform_apply';
     expect(() => parseCapabilities(unknown)).toThrow();
+    const historic = clone(caps);
+    historic.mode = 'approved_v07_historical_map_read_only';
+    historic.capabilities[9].availability = 'available';
+    historic.capabilities[9].path = '/api/v1/containment-map/historical';
+    expect(parseCapabilities(historic).capabilities[9].availability).toBe('available');
+    const forbidden = clone(historic);
+    forbidden.capabilities[2].availability = 'available';
+    expect(() => parseCapabilities(forbidden)).toThrow();
+    historic.capabilities[9].path = '/api/v1/containment-map/live';
+    expect(() => parseCapabilities(historic)).toThrow();
   });
   it('accepts exactly five untested planning contracts', () => {
     expect(parseScenarios(scenarios).scenarios).toHaveLength(5);

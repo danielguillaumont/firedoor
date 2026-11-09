@@ -19,7 +19,7 @@ export interface Capability {
 
 export interface Capabilities {
   schema_version: typeof SCHEMA;
-  mode: 'offline_contracts_only' | 'approved_detached_historical_report_read_only';
+  mode: 'offline_contracts_only' | 'approved_detached_historical_report_read_only' | 'approved_v07_historical_map_read_only';
   capabilities: Capability[];
   limitations: string[];
 }
@@ -79,14 +79,15 @@ export function parseHealth(value: unknown): Health {
 }
 
 const availableNames = new Set(['health', 'scenario_contracts', 'control_catalog']);
-const disabledNames = new Set(['proof_reports', 'control_findings', 'environment_inventory', 'scenario_execution', 'historical_environment_snapshot', 'historical_activity']);
+const disabledNames = new Set(['proof_reports', 'control_findings', 'environment_inventory', 'scenario_execution', 'historical_environment_snapshot', 'historical_activity', 'historical_containment_map']);
 
 export function parseCapabilities(value: unknown): Capabilities {
   const v = object(value, 'capabilities');
   version(v);
   const approved = v.mode === 'approved_detached_historical_report_read_only';
-  if (!approved) eq(v.mode, 'offline_contracts_only', 'capabilities.mode');
-  if (!Array.isArray(v.capabilities) || v.capabilities.length !== 9) throw new Error('capabilities: unexpected count');
+  const historicalMap = v.mode === 'approved_v07_historical_map_read_only';
+  if (!approved && !historicalMap) eq(v.mode, 'offline_contracts_only', 'capabilities.mode');
+  if (!Array.isArray(v.capabilities) || v.capabilities.length !== 10) throw new Error('capabilities: unexpected count');
   const seen = new Set<string>();
   const capabilities = v.capabilities.map((item: unknown, i: number): Capability => {
     const entry = object(item, `capabilities[${i}]`);
@@ -97,6 +98,9 @@ export function parseCapabilities(value: unknown): Capabilities {
       eq(entry.availability, 'available', `capability.${name}`);
       const expectedPath = name === 'health' ? '/api/v1/health' : name === 'scenario_contracts' ? '/api/v1/scenarios' : '/api/v1/control-catalog';
       eq(entry.path, expectedPath, `capability.${name}.path`);
+    } else if (name === 'historical_containment_map' && historicalMap) {
+      eq(entry.availability, 'available', 'capability.historical_containment_map');
+      eq(entry.path, '/api/v1/containment-map/historical', 'capability.historical_containment_map.path');
     } else if (name === 'historical_environment_snapshot' && approved) {
       eq(entry.availability, 'available', 'capability.historical_environment_snapshot');
       eq(entry.path, '/api/v1/environment-snapshot', 'capability.historical_environment_snapshot.path');
@@ -115,7 +119,7 @@ export function parseCapabilities(value: unknown): Capabilities {
     return { name, availability: entry.availability as Capability['availability'], ...(entry.path === undefined ? {} : { path: entry.path as string }) };
   });
   if ([...availableNames, ...disabledNames].some((name) => !seen.has(name))) throw new Error('Missing known capabilities');
-  return { schema_version: SCHEMA, mode: approved ? 'approved_detached_historical_report_read_only' : 'offline_contracts_only', capabilities, limitations: strings(v.limitations, 'capabilities.limitations') };
+  return { schema_version: SCHEMA, mode: approved ? 'approved_detached_historical_report_read_only' : historicalMap ? 'approved_v07_historical_map_read_only' : 'offline_contracts_only', capabilities, limitations: strings(v.limitations, 'capabilities.limitations') };
 }
 
 const scenarioIds = new Set(['FD-001', 'FD-002', 'FD-003', 'FD-004', 'FD-005']);

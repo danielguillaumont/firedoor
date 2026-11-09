@@ -101,7 +101,7 @@ func TestV06HistoricalEnvironmentProjectionIsNotCurrentInventory(t *testing.T) {
 	if err := json.Unmarshal(response.Body.Bytes(), &caps); err != nil {
 		t.Fatal(err)
 	}
-	if len(caps.Capabilities) != 9 {
+	if len(caps.Capabilities) != 10 {
 		t.Fatalf("unexpected capability count %d", len(caps.Capabilities))
 	}
 	statuses := map[string]Capability{}
