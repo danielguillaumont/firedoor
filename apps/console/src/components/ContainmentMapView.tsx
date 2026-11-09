@@ -4,6 +4,8 @@ import { loadPlanningContainmentMap } from '../api/client';
 import { expectedPlanningReachability } from '../api/containment';
 import type { MapProfile, MapRouteID, MapZone, PlanningContainmentMap } from '../api/containment';
 import Icon from './Icon';
+import HistoricalContainmentMapPanel from './HistoricalContainmentMapPanel';
+import type { Capabilities } from '../api/contracts';
 
 type MapLoad =
   | { state: 'loading'; data: null }
@@ -151,7 +153,7 @@ export function PlanningMapContent({ map, selectedRoute, onSelectRoute }: {
   </>;
 }
 
-export default function ContainmentMapView() {
+export default function ContainmentMapView({ capabilities = null, capabilityLoading = false }: { capabilities?: Capabilities | null; capabilityLoading?: boolean }) {
   const [profile, setProfile] = useState<MapProfile>('baseline');
   const [selectedRoute, setSelectedRoute] = useState<MapRouteID>('edge-to-app');
   const [attempt, setAttempt] = useState(0);
@@ -181,5 +183,6 @@ export default function ContainmentMapView() {
       result.state === 'error' ? <section className="panel cm-load-state" role="alert"><Icon name="alert" size={23}/><h2>Planning map unavailable</h2><p>The local map endpoint did not return an approved contract. No sample topology or fabricated findings will be displayed.</p><button type="button" className="button button-dark" onClick={() => setAttempt((n) => n + 1)}>Retry map request <Icon name="refresh" size={15}/></button></section> :
       <section className="panel cm-load-state" role="status">Loading the {profile} planning map from the localhost Go API…</section>}
     <p className="cm-page-note">Planning view only · 3 reviewed lab zones · 6 fixed directed routes · no observed findings · no enforcement claim.</p>
+    <HistoricalContainmentMapPanel capabilities={capabilities} capabilityLoading={capabilityLoading}/>
   </>;
 }

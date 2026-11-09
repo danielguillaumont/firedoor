@@ -156,7 +156,7 @@ describe('7C2 strict planning-only Containment Map integration', () => {
     await rejected;
   });
 
-  it('Vite proxies exactly the nine explicit routes and no query, wildcard or live map URL', () => {
+  it('Vite proxies exactly the ten explicit routes and no query, wildcard or live map URL', () => {
     const proxy = (viteConfig as UserConfig).server?.proxy;
     expect(proxy).toBeDefined();
     if (!proxy) throw new Error('Missing Vite proxy');

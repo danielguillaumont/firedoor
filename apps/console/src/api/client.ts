@@ -1,4 +1,5 @@
 import { parsePlanningContainmentMap, type MapProfile } from './containment';
+import { parseHistoricalContainmentMap } from './containmentHistorical';
 import { parseCapabilities, parseHealth, parseScenarios, parseProofSummary, parseControlCatalog, parseHistoricalEnvironment, parseHistoricalActivity } from './contracts';
 
 export const endpoints = {
@@ -11,6 +12,7 @@ export const endpoints = {
   history: '/api/v1/historical-activity',
   baselineMap: '/api/v1/containment-map/baseline',
   hardenedMap: '/api/v1/containment-map/hardened',
+  historicalMap: '/api/v1/containment-map/historical',
 } as const;
 
 // All seven local API responses have a small, reviewed JSON contract. A
@@ -102,3 +104,8 @@ export function loadPlanningContainmentMap(profile: MapProfile, signal: AbortSig
   const path = profile === 'baseline' ? endpoints.baselineMap : endpoints.hardenedMap;
   return getJSON(path, (data) => parsePlanningContainmentMap(data, profile), signal);
 }
+
+// Historical route is called only after explicit user action and an advertised
+// startup-approved capability. Never auto-load or combine with planning data.
+export const loadApprovedHistoricalContainmentMap = (signal: AbortSignal) =>
+  getJSON(endpoints.historicalMap, parseHistoricalContainmentMap, signal);
