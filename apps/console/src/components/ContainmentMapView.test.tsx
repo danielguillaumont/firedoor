@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import App from '../App';
 import { parsePlanningContainmentMap, type MapProfile, type MapRouteID } from '../api/containment';
-import ContainmentMapView, { PlanningMapContent } from './ContainmentMapView';
+import ContainmentMapView, { PlanningMapContent, nextPlanningRouteForKey } from './ContainmentMapView';
 
 const routePairs = [
   ['edge-to-app', 'edge', 'app'], ['app-to-data', 'app', 'data'],
@@ -79,6 +79,37 @@ describe('7D1 visible read-only containment map', () => {
       expect(html).toContain('Not assessed');
     }
     expect(show('hardened', 'edge-to-app')).toContain('Reachable');
+  });
+  it('supports predictable route arrow navigation and Home/End without inventing a route', () => {
+    expect(nextPlanningRouteForKey('edge-to-app', 'ArrowRight')).toBe('app-to-edge');
+    expect(nextPlanningRouteForKey('edge-to-app', 'ArrowLeft')).toBe('data-to-edge');
+    expect(nextPlanningRouteForKey('app-to-data', 'ArrowDown')).toBe('data-to-app');
+    expect(nextPlanningRouteForKey('data-to-edge', 'ArrowUp')).toBe('edge-to-data');
+    expect(nextPlanningRouteForKey('data-to-app', 'Home')).toBe('edge-to-app');
+    expect(nextPlanningRouteForKey('edge-to-app', 'End')).toBe('data-to-edge');
+    expect(nextPlanningRouteForKey('app-to-data', 'Tab')).toBeNull();
+    expect(nextPlanningRouteForKey('edge-to-data', 'Escape')).toBeNull();
+  });
+  it('links selectable route controls to an announced inspector and documents keyboard shortcuts', () => {
+    const html = show('baseline', 'edge-to-data');
+    expect(html).toContain('role="group"');
+    expect((html.match(/aria-controls="cm-route-inspector"/g) ?? [])).toHaveLength(6);
+    expect((html.match(/aria-describedby="cm-route-help"/g) ?? [])).toHaveLength(6);
+    expect(html).toContain('id="cm-route-inspector"');
+    expect(html).toContain('aria-live="polite"');
+    expect(html).toContain('Arrow keys move to adjacent directions');
+    expect(html).toContain('Selected direction');
+    expect(html).toContain('Planning path highlight · no traffic measured');
+  });
+  it('makes expected profile differences explicit without implying observed enforcement', () => {
+    const hardened = show('hardened', 'edge-to-data');
+    expect(hardened).toContain('Plan expects unreachable');
+    expect(hardened).toContain('hardened plan expects unreachable; not assessed');
+    expect(hardened).toContain('NOT ASSESSED');
+    expect(hardened).toContain('Not observed');
+    const baseline = show('baseline', 'edge-to-data');
+    expect(baseline).toContain('baseline plan expects reachable; not assessed');
+    expect(baseline).not.toContain('hardened plan expects unreachable');
   });
   it('renders selectable route buttons, selected diagram highlight, and evidence limitations', () => {
     const html = show('baseline', 'data-to-edge');

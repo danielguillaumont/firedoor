@@ -311,3 +311,25 @@ h2 { font-size: clamp(23px, 1.95vw, 30px); font-weight: 730; line-height: 1.2; m
 .cm-page-note { font-size:11px; margin:22px 0 0; color:#687a77; line-height:1.6; }
 @media(max-width:1250px) { .cm-layout { grid-template-columns:1fr; }.cm-inspector { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); } }
 @media(max-width:760px) { .cm-header { flex-direction:column; align-items:stretch; padding:22px; }.cm-profile-switch { min-width:0; }.cm-counts { grid-template-columns:1fr; gap:8px; }.cm-counts>div { padding:12px 16px; }.cm-inspector { grid-template-columns:1fr; }.cm-graph-panel { padding:16px; }.cm-route-grid { grid-template-columns:1fr; }.cm-graph-heading { flex-wrap:wrap; } }
+
+/* Firedoor v0.7 / 7D2: clearer planning direction and keyboard affordances. */
+.cm-diagram { min-width:650px; }
+.cm-selected-direction { display:flex; flex-wrap:wrap; align-items:center; gap:7px 12px; padding:10px 12px; background:#354e57; border:1px solid #58717a; border-left:3px solid #efbe6c; color:#e1ebe5; }
+.cm-selected-direction span { color:#c2d0cc; font-size:10px; letter-spacing:.7px; font-weight:750; text-transform:uppercase; }
+.cm-selected-direction strong { font-size:15px; color:#fff5dc; }
+.cm-selected-direction small { margin-left:auto; font-size:10.5px; color:#d4c7a8; }
+.cm-keyboard-help { margin:0 0 12px; color:#c0d1cb; font-size:11px; line-height:1.6; }
+.cm-route { grid-template-rows:auto auto auto; row-gap:4px; }
+.cm-route-number { grid-row:span 3; font-size:11px; }
+.cm-route-name { font-size:13px; }
+.cm-route-plan { font-size:10px; color:#f0d39f; font-weight:600; }
+.cm-route-status { font-size:10px; }
+.cm-route:focus-visible, .cm-profile-switch button:focus-visible { outline:3px solid #efbe6c; outline-offset:3px; }
+.cm-scroll-hint { display:none; }
+@media (max-width:760px) {
+  .cm-selected-direction { align-items:flex-start; flex-direction:column; }
+  .cm-selected-direction small { margin-left:0; }
+  .cm-scroll-hint { display:block; margin:14px 0 -7px; color:#d7e4dc; font-size:11px; line-height:1.5; }
+  .cm-diagram-scroll { overscroll-behavior-inline:contain; }
+  .cm-graph-panel { overflow-wrap:anywhere; }
+}
