@@ -283,7 +283,7 @@ func EvaluateDrift(o DriftSnapshot) (DriftReport, error) {
 		PolicyName: o.PolicyName, PolicyUID: o.PolicyUID, ResourceVersion: o.ResourceVersion,
 		ObservationState: o.ObservationState, Verdict: "INCONCLUSIVE", Differences: []string{},
 		Limitations: []string{
-			"A JSON source label does not authenticate Kubernetes API origin or absence; live capture is pending 9E2.",
+			"A JSON source label is not an attestation; only the guarded 9E2 harness can establish live API origin within its isolated cluster.",
 			"Only this disposable kind namespace/policy spec is compared; no Terraform drift or production coverage.",
 			"A matching spec is configuration equivalence, not proof of effective network enforcement; live reachability is a separate check.",
 		},

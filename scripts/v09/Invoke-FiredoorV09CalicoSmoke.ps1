@@ -12,6 +12,9 @@
   disposable test cluster; it never targets the existing firedoor-local cluster.
   -VerifyGoVerdicts runs the same live proof AND evaluates typed Go verdicts at
   protected, weakened and restored phases. Synthetic Go fixtures stay separate.
+  -VerifyLiveDrift reads the actual named NetworkPolicy from the scoped API,
+  compares its full spec with the offline Go driftgate after each transition,
+  then confirms policy absence and recovery. No Terraform state is touched.
   CNI readiness alone is NOT proof of NetworkPolicy enforcement.
   Windows PowerShell 5.1. Never runs Terraform or changes firedoor-local.
   Forced termination or host failure can prevent cleanup.
@@ -24,6 +27,7 @@ param(
     [switch]$VerifyNetworkPolicy,
     [switch]$VerifyLiveRegression,
     [switch]$VerifyGoVerdicts,
+    [switch]$VerifyLiveDrift,
     [string]$CalicoManifestSha256 = ""
 )
 
@@ -48,6 +52,19 @@ $context = "kind-$name"
 $runDir = Join-Path ([System.IO.Path]::GetTempPath()) $name
 $kubeconfig = Join-Path $runDir "kubeconfig"
 $livegateExe = Join-Path $runDir "firedoor-livegate.exe"
+$driftgateExe = Join-Path $runDir "firedoor-driftgate.exe"
+# Only the opt-in drift mode loads the pure policy-list envelope validator.
+# Hash sealing prevents a modified helper from changing safety checks silently.
+if ($VerifyLiveDrift) {
+    $policyListHelper = Join-Path $PSScriptRoot 'Assert-FiredoorV09PolicyListEnvelope.ps1'
+    if (-not (Test-Path -LiteralPath $policyListHelper -PathType Leaf)) {
+        throw '9E2 policy-list validation helper missing. Stop.'
+    }
+    if ((Get-FileHash -LiteralPath $policyListHelper -Algorithm SHA256).Hash.ToLowerInvariant() -cne '06ddcc24beee52cdf3819bce4f185c107887610fb1828295f5f781dd0821b3a6') {
+        throw '9E2 policy-list validation helper checksum mismatch. Stop.'
+    }
+    . $policyListHelper
+}
 
 function Assert-LastExit([string]$Action) {
     if ($LASTEXITCODE -ne 0) {
@@ -366,6 +383,93 @@ function Invoke-LiveGoVerdict([string]$Phase, [string]$Target, [string]$Observed
     Write-Host "LIVE_GO_VERDICT: phase=$Phase target=$Target verdict=$expectedVerdict exit=$exitCode"
 }
 
+# Only the previously generated/verified cluster is read. A successful full
+# list response with ZERO items is confirmed absence. API errors immediately
+# fail closed and are NEVER translated into a missing-policy DRIFT verdict.
+# The Go gate compares the complete observed spec against its own embedded
+# approved spec. The harness does not synthesize an approved-looking spec.
+function Invoke-LiveDriftVerdict([string]$Phase, [string]$ExpectedVerdict, [string]$ExpectedUID) {
+    if (-not $VerifyLiveDrift -or -not $Execute -or
+        @('protected', 'weakened', 'restored', 'missing') -cnotcontains $Phase -or
+        @('MATCH', 'DRIFT') -cnotcontains $ExpectedVerdict -or
+        [string]::IsNullOrWhiteSpace($ExpectedUID)) {
+        throw 'Unapproved live drift snapshot request. Stop.'
+    }
+    # Query the typed, namespace-scoped Kubernetes API endpoint directly.
+    # This avoids kubectl's alternate client-side generic List formatting.
+    # A failed read MUST NOT be reported as policy absence.
+    $policyListPath = "/apis/networking.k8s.io/v1/namespaces/$baselineNamespace/networkpolicies"
+    $lines = @(& kubectl --kubeconfig $kubeconfig --context $context `
+        --request-timeout=30s get --raw=$policyListPath)
+    Assert-LastExit "Read live NetworkPolicy set for $Phase"
+    try { $result = ($lines -join "`n") | ConvertFrom-Json -ErrorAction Stop }
+    catch { throw "Invalid Kubernetes policy-list JSON for $Phase. Stop." }
+    Assert-FiredoorV09PolicyListEnvelope -Document $result
+    $items = @($result.items)
+    $snapshotState = 'found'
+    $uid = ''
+    $resourceVersion = ''
+    $spec = $null
+    if ($Phase -ceq 'missing') {
+        if ($items.Count -ne 0) {
+            throw 'Cannot report missing: a policy remains in the scoped API list. Stop.'
+        }
+        $snapshotState = 'not_found'
+    }
+    else {
+        if ($items.Count -ne 1 -or $null -eq $items[0]) {
+            throw "Expected exactly one policy while $Phase. Stop."
+        }
+        $item = $items[0]
+        if ($item.metadata.name -cne 'allow-trusted-to-data' -or
+            $item.metadata.namespace -cne $baselineNamespace -or
+            [string]$item.metadata.uid -cne $ExpectedUID -or
+            [string]::IsNullOrWhiteSpace([string]$item.metadata.resourceVersion) -or
+            $null -eq $item.PSObject.Properties['spec']) {
+            throw "Policy identity/spec invalid while $Phase. Stop."
+        }
+        $uid = [string]$item.metadata.uid
+        $resourceVersion = [string]$item.metadata.resourceVersion
+        $spec = $item.spec
+    }
+    $snapshot = [ordered]@{
+        schema_version = 'firedoor.v09.drift.snapshot.v1'
+        source = 'guarded_kind_calico_api'
+        run_id = $name
+        cluster = $name
+        context = $context
+        namespace = $baselineNamespace
+        policy_name = 'allow-trusted-to-data'
+        observation_state = $snapshotState
+        policy_uid = $uid
+        resource_version = $resourceVersion
+        spec = $spec
+    }
+    $path = Join-Path $runDir ("drift-observation-$Phase.json")
+    $utf8 = [System.Text.UTF8Encoding]::new($false)
+    [IO.File]::WriteAllText($path, ($snapshot | ConvertTo-Json -Depth 20 -Compress), $utf8)
+    $raw = @(& $driftgateExe --input $path)
+    $exitCode = $LASTEXITCODE
+    try { $report = ($raw -join "`n") | ConvertFrom-Json -ErrorAction Stop }
+    catch { throw "Driftgate returned invalid JSON for $Phase. Stop." }
+    $expectedCode = if ($ExpectedVerdict -ceq 'MATCH') { 0 } else { 10 }
+    if ($exitCode -ne $expectedCode -or
+        $report.verdict -cne $ExpectedVerdict -or
+        $report.schema_version -cne 'firedoor.v09.drift.snapshot.v1' -or
+        $report.source -cne 'guarded_kind_calico_api' -or
+        $report.run_id -cne $name -or $report.cluster -cne $name -or
+        $report.policy_name -cne 'allow-trusted-to-data' -or
+        $report.observation_state -cne $snapshotState -or
+        $report.policy_uid -cne $uid -or
+        $report.resource_version -cne $resourceVersion -or
+        ($ExpectedVerdict -ceq 'MATCH' -and @($report.differences).Count -ne 0) -or
+        ($ExpectedVerdict -ceq 'DRIFT' -and @($report.differences).Count -eq 0)) {
+        throw "Go drift verdict/exit mismatch for $Phase (exit $exitCode). Stop."
+    }
+    Write-Host "LIVE_DRIFT_VERDICT: phase=$Phase state=$snapshotState verdict=$ExpectedVerdict exit=$exitCode"
+    return $resourceVersion
+}
+
 function Assert-IsolatedKubeconfig([string]$Path, [string]$ExpectedContext) {
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
         throw "Dedicated kubeconfig missing. Stop."
@@ -383,7 +487,7 @@ function Assert-IsolatedKubeconfig([string]$Path, [string]$ExpectedContext) {
 }
 
 $selectedLiveModes = 0
-foreach ($mode in @($VerifyLiveBaseline, $VerifyNetworkPolicy, $VerifyLiveRegression, $VerifyGoVerdicts)) {
+foreach ($mode in @($VerifyLiveBaseline, $VerifyNetworkPolicy, $VerifyLiveRegression, $VerifyGoVerdicts, $VerifyLiveDrift)) {
     if ($mode) { $selectedLiveModes++ }
 }
 if ($selectedLiveModes -gt 1) {
@@ -397,6 +501,9 @@ if ($VerifyLiveRegression -and -not $Execute) {
 }
 if ($VerifyGoVerdicts -and -not $Execute) {
     throw 'Go live-verdict verification requires explicit -Execute. Stop.'
+}
+if ($VerifyLiveDrift -and -not $Execute) {
+    throw 'Live drift verification requires explicit -Execute. Stop.'
 }
 if ($VerifyLiveBaseline -and -not $Execute) {
     throw 'The live workload baseline requires explicit -Execute. Stop.'
@@ -420,13 +527,13 @@ if ($manifestFull.StartsWith($repoPrefix, [StringComparison]::OrdinalIgnoreCase)
     throw "Calico manifest must not be inside source repository. Stop."
 }
 
-if ($VerifyNetworkPolicy -or $VerifyLiveRegression -or $VerifyGoVerdicts) {
+if ($VerifyNetworkPolicy -or $VerifyLiveRegression -or $VerifyGoVerdicts -or $VerifyLiveDrift) {
     Assert-NetworkPolicyFixture $networkPolicyManifest $networkPolicySha256
 }
-if ($VerifyLiveRegression -or $VerifyGoVerdicts) {
+if ($VerifyLiveRegression -or $VerifyGoVerdicts -or $VerifyLiveDrift) {
     Assert-WeakenedPolicyFixture $weakenedPolicyManifest $weakenedPolicySha256
 }
-if ($VerifyLiveBaseline -or $VerifyNetworkPolicy -or $VerifyLiveRegression -or $VerifyGoVerdicts) {
+if ($VerifyLiveBaseline -or $VerifyNetworkPolicy -or $VerifyLiveRegression -or $VerifyGoVerdicts -or $VerifyLiveDrift) {
     if (-not (Test-Path -LiteralPath $baselineManifest -PathType Leaf)) {
         throw 'Expected v0.9C1 workload manifest missing. Stop.'
     }
@@ -442,7 +549,7 @@ if (-not $Execute -and -not $PrepareManifest) {
     Write-Host "Calico release: $calicoVersion (official version-pinned upstream manifest)"
     Write-Host "Manifest location: $manifestPath"
     Write-Host "-PrepareManifest downloads that manifest; -Execute requires its SHA-256."
-    Write-Host "No Terraform or existing-cluster changes. Regression test only with -Execute -VerifyLiveRegression."
+    Write-Host "No Terraform or existing-cluster changes. Live drift requires -Execute -VerifyLiveDrift."
     return
 }
 
@@ -541,6 +648,18 @@ try {
         }
         Write-Host 'PASS: Typed Go livegate built in disposable runtime directory.'
     }
+    if ($VerifyLiveDrift) {
+        Push-Location $repo
+        try {
+            & go build -o $driftgateExe ./scripts/v09/cmd/driftgate
+            Assert-LastExit 'Build isolated driftgate binary'
+        }
+        finally { Pop-Location }
+        if (-not (Test-Path -LiteralPath $driftgateExe -PathType Leaf)) {
+            throw 'Go driftgate executable missing after build. Stop.'
+        }
+        Write-Host 'PASS: Go driftgate built in disposable runtime directory.'
+    }
     Write-Host "Creating only disposable Calico kind cluster $name."
     $attemptedCreate = $true
     $arguments = 'create cluster --name "' + $name + '" --config "' + $config +
@@ -603,7 +722,7 @@ try {
     Write-Host 'PASS: Calico DaemonSet ready (2/2), both kind nodes Ready.'
     Write-Host 'LIMIT: CNI readiness alone is NOT live NetworkPolicy enforcement proof.'
 
-    if ($VerifyLiveBaseline -or $VerifyNetworkPolicy -or $VerifyLiveRegression -or $VerifyGoVerdicts) {
+    if ($VerifyLiveBaseline -or $VerifyNetworkPolicy -or $VerifyLiveRegression -or $VerifyGoVerdicts -or $VerifyLiveDrift) {
         # This namespace exists only in this freshly created, identity-checked cluster.
         # There must be NO policy: this is a positive-control test, not denial proof.
         Write-Host "Creating fixed positive-control workloads in $baselineNamespace only."
@@ -667,7 +786,7 @@ try {
             }
         }
         Write-Host 'PASS: 9C1 positive baseline (4/4 HTTP checks) verified.'
-        if ($VerifyNetworkPolicy -or $VerifyLiveRegression -or $VerifyGoVerdicts) {
+        if ($VerifyNetworkPolicy -or $VerifyLiveRegression -or $VerifyGoVerdicts -or $VerifyLiveDrift) {
             # This is a single fixed ingress-only rule. Verify the policy API
             # interpretation rather than trusting kubectl create alone.
             Write-Host 'Creating hash-sealed allow-trusted-to-data NetworkPolicy.'
@@ -725,6 +844,9 @@ try {
                 throw 'Edge client is not responding to exec; denial is inconclusive. Stop.'
             }
             Write-Host 'PASS: Edge-client remains executable; denied traffic is not an absent pod.'
+            if ($VerifyLiveDrift) {
+                $previousDriftRV = Invoke-LiveDriftVerdict 'protected' 'MATCH' $protectedUID
+            }
             if ($VerifyGoVerdicts) {
                 Assert-RegressionPolicyState 'protected' $protectedUID
                 $targets = @(
@@ -737,13 +859,20 @@ try {
                 }
             }
 
-            if ($VerifyLiveRegression -or $VerifyGoVerdicts) {
+            if ($VerifyLiveRegression -or $VerifyGoVerdicts -or $VerifyLiveDrift) {
                 Write-Host 'WEAKENING: Updating the SAME live policy to allow all namespace pods.'
                 & kubectl --kubeconfig $kubeconfig --context $context `
                     --request-timeout=45s apply -f $weakenedPolicyManifest
                 Assert-LastExit 'Apply intentionally weakened NetworkPolicy'
                 Assert-RegressionPolicyState 'weakened' $protectedUID
                 Write-Host 'PASS: Live API confirms same policy UID with all-pod ingress.'
+                if ($VerifyLiveDrift) {
+                    $driftRV = Invoke-LiveDriftVerdict 'weakened' 'DRIFT' $protectedUID
+                    if ($driftRV -ceq $previousDriftRV) {
+                        throw 'Policy resourceVersion unchanged after out-of-band weakening. Stop.'
+                    }
+                    $previousDriftRV = $driftRV
+                }
 
                 foreach ($url in @(
                     'http://data.firedoor-v09c1.svc.cluster.local:8080/',
@@ -766,6 +895,12 @@ try {
                     --request-timeout=45s apply -f $networkPolicyManifest
                 Assert-LastExit 'Restore protected NetworkPolicy'
                 Assert-RegressionPolicyState 'protected' $protectedUID
+                if ($VerifyLiveDrift) {
+                    $driftRV = Invoke-LiveDriftVerdict 'restored' 'MATCH' $protectedUID
+                    if ($driftRV -ceq $previousDriftRV) {
+                        throw 'Policy resourceVersion unchanged after restoration. Stop.'
+                    }
+                }
                 foreach ($url in @(
                     'http://data.firedoor-v09c1.svc.cluster.local:8080/',
                     "http://${targetIP}:8080/"
@@ -778,7 +913,7 @@ try {
                     }
                 }
                 Write-Host 'PASS: Protected boundary restored (edge blocked 2/2).'
-                if (-not $VerifyGoVerdicts) {
+                if (-not $VerifyGoVerdicts -and -not $VerifyLiveDrift) {
                     Write-Host 'LIMITATION: 9D1 demonstrates regression/recovery; typed live Go verdict and CI gating follow in 9D2/9F.'
                 }
             }
@@ -794,6 +929,9 @@ try {
             if (@($afterPol.items).Count -ne 0) {
                 throw 'NetworkPolicy still exists after deletion. Stop.'
             }
+            if ($VerifyLiveDrift) {
+                $null = Invoke-LiveDriftVerdict 'missing' 'DRIFT' $protectedUID
+            }
             foreach ($url in @(
                 'http://data.firedoor-v09c1.svc.cluster.local:8080/',
                 "http://${targetIP}:8080/"
@@ -803,7 +941,13 @@ try {
                 Write-Host "PASS: edge-client recovered and trusted-client stayed healthy: $url"
             }
             Write-Host 'PASS: v0.9C2 protected boundary and removal recovery validated.'
-            Write-Host 'LIMITATION: This is local kind/Calico behavioral evidence, not yet CI gating or drift detection.'
+            if ($VerifyLiveDrift) {
+                Write-Host 'PASS: v0.9E2 guarded live policy drift MATCH/DRIFT/MATCH/DRIFT and restoration.'
+                Write-Host 'LIMITATION: no Terraform state comparison or CI enforcement yet.'
+            }
+            else {
+                Write-Host 'LIMITATION: This is local kind/Calico behavioral evidence, not yet CI gating or drift detection.'
+            }
         }
         else {
             Write-Host 'LIMITATION: No denied traffic or NetworkPolicy enforcement was tested.'
@@ -837,7 +981,11 @@ finally {
     }
 }
 if (-not $completed -or -not $cleanupSuccess) { throw 'CNI smoke or cleanup incomplete. Stop.' }
-if ($VerifyGoVerdicts) {
+if ($VerifyLiveDrift) {
+    Write-Host 'PASS: Firedoor v0.9E2 live drift verdicts (MATCH + DRIFT + MATCH + confirmed missing DRIFT) and cleanup.'
+    Write-Host 'LIMITATION: CI does not yet provision a live disposable cluster.'
+}
+elseif ($VerifyGoVerdicts) {
     Write-Host 'PASS: Firedoor v0.9D2 typed Go live verdicts (2 MATCH + 2 REGRESSION + 2 MATCH) and cleanup.'
     Write-Host 'LIMITATION: CI does not yet provision a live disposable cluster.'
 }
