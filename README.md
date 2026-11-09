@@ -45,6 +45,18 @@ npm run dev
 
 Open **http://127.0.0.1:5173/** and select **Containment Map**. The console uses a localhost-only, GET-only API; historical evidence stays locked without separate server-side approval. The interface does not run scans, apply Terraform, or change cluster policy.
 
-**Status:** v0.7 Containment Map merged to `main` in [PR #8](https://github.com/danielguillaumont/firedoor/pull/8). This is an actively developed engineering lab and portfolio demonstration—not a production scanner, continuous monitor, or certified security assessment.
+## Reproduce the v0.8 Boundary Proof demo
+
+On **Windows PowerShell 5.1** with Go 1.27 installed, run this from the repository root to generate **clearly labeled synthetic** HTML/JSON reports using the real offline comparison CLI:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass `
+    -File .\scripts\v08\Run-FiredoorV08SyntheticReview.ps1 `
+    -ReviewFolder Firedoor-v08-Synthetic-Review-README
+```
+
+Open `Downloads/Firedoor-v08-Synthetic-Review-README/SYNTHETIC-comparison.html` to inspect the report. The command refuses to overwrite an existing review folder; it uses disposable synthetic inputs and does not access your private evidence, Kubernetes cluster, or Terraform state. **This is a demonstration of report generation, not proof of network-policy enforcement.**
+
+**Status:** v0.8 Boundary Proof reporting and comparison merged into `main` in [PR #10](https://github.com/danielguillaumont/firedoor/pull/10), building on the v0.7 Containment Map ([PR #8](https://github.com/danielguillaumont/firedoor/pull/8)). Firedoor remains an actively developed engineering lab and portfolio demonstration—not a production scanner, continuous monitor, or certified security assessment.
 
 **Explore the engineering:** [v0.8 offline proof-report demo (synthetic)](docs/v08-boundary-proofs-slice8e2.md) · [Architecture](docs/architecture.md) · [Demo walkthrough](docs/v06-console-demo-guide.md) · [v0.7 implementation and validation](docs/v07-containment-map-slice7e2b.md) · [Safety boundaries](SECURITY.md) · [Milestone evidence](docs/v05-validation-summary.md)
