@@ -10,6 +10,7 @@ import type { Capabilities, Health, Scenario, Scenarios } from './api/contracts'
 import BrandMark from './components/BrandMark';
 import Icon from './components/Icon';
 import type { IconName } from './components/Icon';
+import { initialDemoViewFromSearch } from './demoView';
 
 type Page = 'overview' | 'scenarios' | 'capabilities' | 'proof' | 'controls' | 'environment' | 'history' | 'containment';
 type Remote<T> = { state: 'loading' | 'ready' | 'error'; data: T | null; error: string | null };
@@ -106,7 +107,8 @@ function CapabilitiesView({ data, retry }: { data: Remote<Capabilities>; retry: 
 }
 
 export default function App() {
-  const [page, setPage] = useState<Page>('overview');
+  const [page, setPage] = useState<Page>(() =>
+    typeof window !== 'undefined' ? initialDemoViewFromSearch(window.location.search) : 'overview');
   const [refresh, setRefresh] = useState(0);
   const [health, setHealth] = useState<Remote<Health>>(() => loading<Health>());
   const [capabilities, setCapabilities] = useState<Remote<Capabilities>>(() => loading<Capabilities>());
