@@ -4,19 +4,21 @@ import { loadCapabilities, loadHealth, loadScenarios } from './api/client';
 import ProofLensView from './components/ProofLensView';
 import { ControlsView, EnvironmentView } from './components/ObservationViews';
 import HistoryView from './components/HistoryView';
+import ContainmentMapView from './components/ContainmentMapView';
 import ScenarioDetailsDialog from './components/ScenarioDetailsDialog';
 import type { Capabilities, Health, Scenario, Scenarios } from './api/contracts';
 import BrandMark from './components/BrandMark';
 import Icon from './components/Icon';
 import type { IconName } from './components/Icon';
 
-type Page = 'overview' | 'scenarios' | 'capabilities' | 'proof' | 'controls' | 'environment' | 'history';
+type Page = 'overview' | 'scenarios' | 'capabilities' | 'proof' | 'controls' | 'environment' | 'history' | 'containment';
 type Remote<T> = { state: 'loading' | 'ready' | 'error'; data: T | null; error: string | null };
 const loading = <T,>(): Remote<T> => ({ state: 'loading', data: null, error: null });
 
 const navItems: Array<{ page: Page | null; label: string; icon: IconName; note?: string }> = [
   { page: 'overview', label: 'Overview', icon: 'dashboard' },
   { page: 'scenarios', label: 'Scenarios', icon: 'layers' },
+  { page: 'containment', label: 'Containment Map', icon: 'git' },
   { page: 'proof', label: 'Proof Lens', icon: 'eye' },
   { page: 'controls', label: 'Controls', icon: 'shield' },
   { page: 'environment', label: 'Environment', icon: 'server' },
@@ -121,8 +123,8 @@ export default function App() {
   }, [refresh]);
 
   return <><a className="skip-link" href="#firedoor-main">Skip to main content</a><div className="shell"><aside className="sidebar"><div className="brand"><BrandMark size={43}/><div className="brand-text"><strong>FIREDOOR</strong><small>CONTAIN THE SPREAD.</small></div></div>
-    <div className="workspace-label">WORKSPACE <span>V0.6 PREVIEW</span></div>
+    <div className="workspace-label">WORKSPACE <span>V0.7 DEV</span></div>
     <nav aria-label="Main navigation" className="nav">{navItems.map((item) => <button key={item.label} type="button" disabled={item.page === null} onClick={() => item.page && setPage(item.page)} className={`nav-item ${page === item.page ? 'active' : ''}`} aria-current={page === item.page ? 'page' : undefined}><Icon name={item.icon} size={19}/><span>{item.label}</span>{item.note && <small>{item.note}</small>}</button>)}</nav>
     <div className="sidebar-bottom"><div className="sidebar-cap"><span className="tiny-square"/> DEVELOPMENT POSTURE</div><div className="sidebar-desc">No live validations, Terraform operations, or automatic evidence reads.</div><button type="button" className="sidebar-system" onClick={() => setPage('capabilities')}><Icon name="activity" size={17}/> API capabilities <Icon name="chevron" size={17}/></button></div>
-  </aside><main id="firedoor-main" tabIndex={-1} className="main"><header className="topbar"><div className="breadcrumb">WORKSPACE <span>/</span> <strong>{page === 'overview' ? 'OVERVIEW' : page === 'scenarios' ? 'SCENARIOS' : page === 'proof' ? 'PROOF LENS' : page === 'controls' ? 'CONTROLS' : page === 'environment' ? 'ENVIRONMENT' : page === 'history' ? 'HISTORY' : 'CAPABILITIES'}</strong></div><div className="topbar-actions"><ApiState health={health}/><button className="refresh-button" type="button" onClick={retry} aria-label="Refresh local API responses" title="Refresh local API responses"><Icon name="refresh" size={17}/></button></div></header><div className="content" key={page}>{page === 'overview' ? <Overview health={health} capabilities={capabilities} scenarios={scenarios} retry={retry} navigate={setPage}/> : page === 'scenarios' ? <ScenarioView data={scenarios} retry={retry}/> : page === 'proof' ? <ProofLensView key={`${refresh}-${capabilities.state}-${capabilities.data?.mode ?? 'unavailable'}`} capabilities={capabilities.data}/> : page === 'controls' ? <ControlsView refresh={refresh}/> : page === 'environment' ? <EnvironmentView capabilities={capabilities.data} capabilityLoading={capabilities.state === 'loading'}/> : page === 'history' ? <HistoryView key={`${refresh}-${capabilities.state}-${capabilities.data?.mode ?? 'unavailable'}`} capabilities={capabilities.data} capabilityLoading={capabilities.state === 'loading'}/> : <CapabilitiesView data={capabilities} retry={retry}/>}</div><footer className="footer"><span>FIREDOOR / LOCAL INSPECTION DESK</span><span>GO ENGINE <b>·</b> TERRAFORM INTENT <b>·</b> KUBERNETES EVIDENCE</span><span>SLICE 6D3B / HISTORICAL RECORDS, NOT RUNS</span></footer></main></div></>;
+  </aside><main id="firedoor-main" tabIndex={-1} className="main"><header className="topbar"><div className="breadcrumb">WORKSPACE <span>/</span> <strong>{page === 'overview' ? 'OVERVIEW' : page === 'scenarios' ? 'SCENARIOS' : page === 'containment' ? 'CONTAINMENT MAP' : page === 'proof' ? 'PROOF LENS' : page === 'controls' ? 'CONTROLS' : page === 'environment' ? 'ENVIRONMENT' : page === 'history' ? 'HISTORY' : 'CAPABILITIES'}</strong></div><div className="topbar-actions"><ApiState health={health}/><button className="refresh-button" type="button" onClick={retry} aria-label="Refresh local API responses" title="Refresh local API responses"><Icon name="refresh" size={17}/></button></div></header><div className="content" key={page}>{page === 'overview' ? <Overview health={health} capabilities={capabilities} scenarios={scenarios} retry={retry} navigate={setPage}/> : page === 'scenarios' ? <ScenarioView data={scenarios} retry={retry}/> : page === 'containment' ? <ContainmentMapView/> : page === 'proof' ? <ProofLensView key={`${refresh}-${capabilities.state}-${capabilities.data?.mode ?? 'unavailable'}`} capabilities={capabilities.data}/> : page === 'controls' ? <ControlsView refresh={refresh}/> : page === 'environment' ? <EnvironmentView capabilities={capabilities.data} capabilityLoading={capabilities.state === 'loading'}/> : page === 'history' ? <HistoryView key={`${refresh}-${capabilities.state}-${capabilities.data?.mode ?? 'unavailable'}`} capabilities={capabilities.data} capabilityLoading={capabilities.state === 'loading'}/> : <CapabilitiesView data={capabilities} retry={retry}/>}</div><footer className="footer"><span>FIREDOOR / LOCAL INSPECTION DESK</span><span>GO ENGINE <b>·</b> TERRAFORM INTENT <b>·</b> KUBERNETES EVIDENCE</span><span>V0.7 DEV / PLANNING MAP, NOT ENFORCEMENT</span></footer></main></div></>;
 }

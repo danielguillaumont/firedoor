@@ -85,11 +85,11 @@ function zoneIsValid(value: unknown): value is MapZone {
 function routeIsValid(value: unknown): value is MapRouteID {
   return routeIDs.some((route) => route === value);
 }
-function expectedReachability(profile: MapProfile, id: MapRouteID): 'reachable' | 'unreachable' {
+export function expectedPlanningReachability(profile: MapProfile, id: MapRouteID): 'reachable' | 'unreachable' {
   return profile === 'hardened' && (id === 'edge-to-data' || id === 'data-to-app') ? 'unreachable' : 'reachable';
 }
 function expectedReason(profile: MapProfile, id: MapRouteID): string {
-  return `The validated v0.3 plan expects ${expectedReachability(profile, id)} HTTP/TCP connectivity. This is planning-only, not a Terraform-backed declaration, measured result, or enforcement proof.`;
+  return `The validated v0.3 plan expects ${expectedPlanningReachability(profile, id)} HTTP/TCP connectivity. This is planning-only, not a Terraform-backed declaration, measured result, or enforcement proof.`;
 }
 
 // The route and node allowlists must match the reviewed Go 7C1 projection,
