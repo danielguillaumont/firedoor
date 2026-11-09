@@ -52,7 +52,7 @@ const capabilitiesFixture = (approved: boolean) => parseCapabilities({
 const copy = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 
 describe('6D2 read-only observation contracts', () => {
-  it('Vite forwards exactly the seven approved read-only endpoints to loopback', () => {
+  it('Vite forwards exactly the nine approved read-only endpoints to loopback', () => {
     const proxy = (viteConfig as UserConfig).server?.proxy;
     expect(proxy).toBeDefined();
     if (!proxy) throw new Error('Missing development proxy');
@@ -63,7 +63,7 @@ describe('6D2 read-only observation contracts', () => {
     for (const path of Object.values(endpoints)) {
       expect(matcher.test(path), `Missing Vite proxy for ${path}`).toBe(true);
     }
-    for (const forbidden of ['/api/v1/control-findings', '/api/v1/environment-inventory', '/api/v1/proof-summary/extra', '/api/v1/execute', '/api/v1/environment-snapshot?live=true']) {
+    for (const forbidden of ['/api/v1/control-findings', '/api/v1/environment-inventory', '/api/v1/proof-summary/extra', '/api/v1/execute', '/api/v1/environment-snapshot?live=true', '/api/v1/containment-map/production', '/api/v1/containment-map/hardened?live=1', '/api/v1/containment-map/baseline/extra']) {
       expect(matcher.test(forbidden), `Unexpected Vite proxy for ${forbidden}`).toBe(false);
     }
     if (typeof target === 'string') throw new Error('Proxy must strip browser credentials');
