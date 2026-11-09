@@ -18,6 +18,7 @@ A `NetworkPolicy` existing does not prove traffic was blocked. A failed connecti
 - **Inspect security controls:** use a Go CLI for scoped Kubernetes configuration audits, evidence-aware findings, and guarded lab verification workflows.
 - **Connect the evidence:** examine Terraform plan receipts, Kubernetes snapshots, and historical connectivity observations in a read-only React inspection desk.
 - **Show what is not proven:** distinguish `NOT TESTED`, `NOT EVALUATED`, `NOT ASSESSED`, and `INCONCLUSIVE` rather than inventing compliance scores.
+- **Export guarded Boundary Proofs:** generate offline HTML/JSON reports and artifact-provenance comparisons from separately reviewed, saved sources, without claiming policy enforcement or measured security improvement.
 
 **Concrete lab work:** the project has exercised six network paths, produced 18 security audit findings (14 PASS, 1 FAIL, 3 UNKNOWN), and recorded historical A/B/A connectivity and restoration observations. These are bounded lab results, **not independent proof of NetworkPolicy causation**.
 
@@ -46,4 +47,4 @@ Open **http://127.0.0.1:5173/** and select **Containment Map**. The console uses
 
 **Status:** v0.7 Containment Map merged to `main` in [PR #8](https://github.com/danielguillaumont/firedoor/pull/8). This is an actively developed engineering lab and portfolio demonstration—not a production scanner, continuous monitor, or certified security assessment.
 
-**Explore the engineering:** [Architecture](docs/architecture.md) · [Demo walkthrough](docs/v06-console-demo-guide.md) · [v0.7 implementation and validation](docs/v07-containment-map-slice7e2b.md) · [Safety boundaries](SECURITY.md) · [Milestone evidence](docs/v05-validation-summary.md)
+**Explore the engineering:** [v0.8 offline proof-report demo (synthetic)](docs/v08-boundary-proofs-slice8e2.md) · [Architecture](docs/architecture.md) · [Demo walkthrough](docs/v06-console-demo-guide.md) · [v0.7 implementation and validation](docs/v07-containment-map-slice7e2b.md) · [Safety boundaries](SECURITY.md) · [Milestone evidence](docs/v05-validation-summary.md)
