@@ -1,0 +1,68 @@
+name: Firedoor v0.9 live Kubernetes boundary
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v09-live-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  live-boundary-regression:
+    name: v09 live boundary regression (kind + Calico)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout branch without persisted credentials
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Install Go from go.mod
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install pinned kind CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          go install sigs.k8s.io/kind@v0.33.0
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+          "$(go env GOPATH)/bin/kind" version
+
+      - name: Install pinned kubectl client
+        shell: bash
+        run: |
+          set -euo pipefail
+          tool_dir="${RUNNER_TEMP}/firedoor-tools"
+          mkdir -p "$tool_dir"
+          base='https://dl.k8s.io/release/v1.36.4/bin/linux/amd64/kubectl'
+          curl --fail --silent --show-error --location --retry 3 "$base" -o "$tool_dir/kubectl"
+          curl --fail --silent --show-error --location --retry 3 "$base.sha256" -o "$tool_dir/kubectl.sha256"
+          printf '%s  %s\n' "$(cat "$tool_dir/kubectl.sha256")" "$tool_dir/kubectl" | sha256sum --check --status
+          chmod +x "$tool_dir/kubectl"
+          echo "$tool_dir" >> "$GITHUB_PATH"
+          "$tool_dir/kubectl" version --client
+
+      - name: Fail-closed offline negative tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n scripts/v09/ci_live_kind.sh
+          python3 scripts/v09/ci_live_boundary.py --self-test
+          go test ./internal/regression/...
+          go vet ./internal/regression/...
+
+      - name: Real disposable-cluster boundary acceptance
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/v09/ci_live_kind.sh --execute
