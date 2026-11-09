@@ -15,6 +15,7 @@
 param(
     [switch]$Execute,
     [switch]$PrepareManifest,
+    [switch]$VerifyLiveBaseline,
     [string]$CalicoManifestSha256 = ""
 )
 
@@ -27,6 +28,8 @@ $nodeImage = "kindest/node:v1.36.4"
 $calicoVersion = "v3.33.0"
 $manifestUri = "https://raw.githubusercontent.com/projectcalico/calico/v3.33.0/manifests/calico.yaml"
 $manifestPath = Join-Path $HOME "Downloads\Firedoor-Calico-v3.33.0.yaml"
+$baselineManifest = Join-Path $repo "infrastructure\kind\v09c1-positive-baseline.yaml"
+$baselineNamespace = "firedoor-v09c1"
 $nonce = ([guid]::NewGuid().ToString("N")).Substring(0, 12)
 $name = "firedoor-v09-$nonce"
 $context = "kind-$name"
@@ -116,6 +119,28 @@ function Assert-CalicoManifestText([string]$Text) {
     }
 }
 
+# Pure, bounded inspection of our fixed v0.9C1 manifest. No external input is
+# accepted as a workload path, preventing arbitrary kubectl create operations.
+function Assert-BaselineManifestText([string]$Text) {
+    $kinds = @([regex]::Matches($Text, '(?m)^kind:\s*(\S+)\s*$') | ForEach-Object { $_.Groups[1].Value })
+    if ($kinds.Count -ne 6 -or
+        @($kinds | Where-Object { $_ -eq 'Namespace' }).Count -ne 1 -or
+        @($kinds | Where-Object { $_ -eq 'ConfigMap' }).Count -ne 1 -or
+        @($kinds | Where-Object { $_ -eq 'Pod' }).Count -ne 3 -or
+        @($kinds | Where-Object { $_ -eq 'Service' }).Count -ne 1) {
+        throw 'Unexpected v0.9C1 workload resource kinds. Stop.'
+    }
+    if ($Text -notmatch 'FIREDOOR_V09C1_DATA_OK' -or
+        $Text -notmatch '(?m)^\s*name:\s*firedoor-v09c1\s*$' -or
+        $Text -notmatch '(?m)^\s*name:\s*data-server\s*$' -or
+        $Text -notmatch '(?m)^\s*name:\s*edge-client\s*$' -or
+        $Text -notmatch '(?m)^\s*name:\s*trusted-client\s*$' -or
+        $Text -notmatch '(?m)^\s*name:\s*data\s*$' -or
+        @([regex]::Matches($Text, '(?m)^\s*namespace:\s*firedoor-v09c1\s*$')).Count -ne 5) {
+        throw 'v0.9C1 workload identity mismatch. Stop.'
+    }
+}
+
 function Assert-IsolatedKubeconfig([string]$Path, [string]$ExpectedContext) {
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
         throw "Dedicated kubeconfig missing. Stop."
@@ -132,6 +157,9 @@ function Assert-IsolatedKubeconfig([string]$Path, [string]$ExpectedContext) {
     }
 }
 
+if ($VerifyLiveBaseline -and -not $Execute) {
+    throw 'The live workload baseline requires explicit -Execute. Stop.'
+}
 if ($Execute -and $PrepareManifest) {
     throw "Choose either -PrepareManifest or -Execute. Stop."
 }
@@ -149,6 +177,13 @@ if ($runFull.StartsWith($repoPrefix, [StringComparison]::OrdinalIgnoreCase)) {
 $manifestFull = [IO.Path]::GetFullPath($manifestPath)
 if ($manifestFull.StartsWith($repoPrefix, [StringComparison]::OrdinalIgnoreCase)) {
     throw "Calico manifest must not be inside source repository. Stop."
+}
+
+if ($VerifyLiveBaseline) {
+    if (-not (Test-Path -LiteralPath $baselineManifest -PathType Leaf)) {
+        throw 'Expected v0.9C1 workload manifest missing. Stop.'
+    }
+    Assert-BaselineManifestText ([IO.File]::ReadAllText($baselineManifest))
 }
 
 if (-not $Execute -and -not $PrepareManifest) {
@@ -304,7 +339,74 @@ try {
         throw 'Calico node DaemonSet does not have two ready pods. Stop.'
     }
     Write-Host 'PASS: Calico DaemonSet ready (2/2), both kind nodes Ready.'
-    Write-Host 'LIMIT: This is CNI readiness, NOT live NetworkPolicy enforcement proof.'
+    Write-Host 'LIMIT: CNI readiness alone is NOT live NetworkPolicy enforcement proof.'
+
+    if ($VerifyLiveBaseline) {
+        # This namespace exists only in this freshly created, identity-checked cluster.
+        # There must be NO policy: this is a positive-control test, not denial proof.
+        Write-Host "Creating fixed positive-control workloads in $baselineNamespace only."
+        & kubectl --kubeconfig $kubeconfig --context $context `
+            --request-timeout=90s create -f $baselineManifest
+        Assert-LastExit 'Create baseline namespace and workloads'
+
+        & kubectl --kubeconfig $kubeconfig --context $context `
+            --request-timeout=240s -n $baselineNamespace `
+            wait pod --all --for=condition=Ready --timeout=210s
+        Assert-LastExit 'Three v0.9C1 workload pods Ready'
+
+        $podText = @(& kubectl --kubeconfig $kubeconfig --context $context `
+            --request-timeout=30s -n $baselineNamespace get pods -o json)
+        Assert-LastExit 'Baseline pod list'
+        try { $pods = ($podText -join "`n") | ConvertFrom-Json -ErrorAction Stop }
+        catch { throw 'Invalid baseline pod list JSON. Stop.' }
+        $actualPods = @($pods.items | ForEach-Object { $_.metadata.name })
+        $expectedPods = @('data-server', 'edge-client', 'trusted-client')
+        if (@(Compare-Object ($expectedPods | Sort-Object) ($actualPods | Sort-Object)).Count -ne 0) {
+            throw 'Baseline workload pod names mismatch. Stop.'
+        }
+        $targetPod = @($pods.items | Where-Object { $_.metadata.name -eq 'data-server' })
+        if ($targetPod.Count -ne 1 -or
+            $targetPod[0].status.podIP -notmatch '^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$') {
+            throw 'Baseline destination pod IP missing or invalid. Stop.'
+        }
+        $targetIP = $targetPod[0].status.podIP
+        $policiesText = @(& kubectl --kubeconfig $kubeconfig --context $context `
+            --request-timeout=30s -n $baselineNamespace get networkpolicies -o json)
+        Assert-LastExit 'Baseline policy absence check'
+        try { $policies = ($policiesText -join "`n") | ConvertFrom-Json -ErrorAction Stop }
+        catch { throw 'Invalid baseline NetworkPolicy list JSON. Stop.' }
+        if (@($policies.items).Count -ne 0) {
+            throw 'Unexpected NetworkPolicy in positive-control namespace. Stop.'
+        }
+        Write-Host 'PASS: Exactly three workload pods Ready; no NetworkPolicy present.'
+
+        # Verify HTTP response CONTENT, not just a successful TCP connection.
+        # Test both cluster DNS/Service and direct pod IP from EACH client.
+        foreach ($client in @('edge-client', 'trusted-client')) {
+            foreach ($url in @(
+                'http://data.firedoor-v09c1.svc.cluster.local:8080/',
+                "http://${targetIP}:8080/"
+            )) {
+                $observed = $false
+                for ($attempt = 1; $attempt -le 3; $attempt++) {
+                    $reply = @(& kubectl --kubeconfig $kubeconfig --context $context `
+                        --request-timeout=35s -n $baselineNamespace `
+                        exec $client -- wget -q -T 8 -O - $url)
+                    if ($LASTEXITCODE -eq 0 -and ($reply -join "`n").Trim() -ceq 'FIREDOOR_V09C1_DATA_OK') {
+                        $observed = $true
+                        break
+                    }
+                    Start-Sleep -Seconds 3
+                }
+                if (-not $observed) {
+                    throw "Baseline connectivity failed: $client -> $url (expected exact HTTP marker). Stop."
+                }
+                Write-Host "PASS: $client -> $url returned expected marker."
+            }
+        }
+        Write-Host 'PASS: 9C1 positive baseline (4/4 HTTP checks) verified.'
+        Write-Host 'LIMITATION: No denied traffic or NetworkPolicy enforcement was tested.'
+    }
     $completed = $true
 }
 finally {
@@ -333,5 +435,11 @@ finally {
     }
 }
 if (-not $completed -or -not $cleanupSuccess) { throw 'CNI smoke or cleanup incomplete. Stop.' }
-Write-Host 'PASS: Firedoor v0.9B2 disposable Calico CNI smoke and cleanup.'
-Write-Host 'NOTE: No Terraform apply or NetworkPolicy reachability checks were run.'
+if ($VerifyLiveBaseline) {
+    Write-Host 'PASS: Firedoor v0.9C1 live positive baseline and cleanup.'
+    Write-Host 'NOTE: No Terraform apply or NetworkPolicy enforcement denial checks were run.'
+}
+else {
+    Write-Host 'PASS: Firedoor v0.9B2 disposable Calico CNI smoke and cleanup.'
+    Write-Host 'NOTE: No Terraform apply or NetworkPolicy reachability checks were run.'
+}
