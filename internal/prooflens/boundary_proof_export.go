@@ -131,51 +131,8 @@ func readBoundarySource(base string) (ProofReport, error) {
 }
 
 func saveBoundaryPairOnce(base string, jsonData, htmlData []byte) error {
-	// Lock serializes exporter instances. Never remove a lock we did not create.
-	lockPath := filepath.Join(base, filepath.FromSlash(boundaryExportLock))
-	lock, err := os.OpenFile(lockPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
-	if err != nil {
+	if err := saveOfflineProofPairOnce(base, boundaryExportLock, LocalBoundaryJSON, LocalBoundaryHTML, jsonData, htmlData); err != nil {
 		return boundaryExportRejected
 	}
-	_ = lock.Close()
-	defer os.Remove(lockPath)
-	jsonPath := filepath.Join(base, filepath.FromSlash(LocalBoundaryJSON))
-	htmlPath := filepath.Join(base, filepath.FromSlash(LocalBoundaryHTML))
-	for _, p := range []string{jsonPath, htmlPath} {
-		if _, err := os.Lstat(p); !errors.Is(err, os.ErrNotExist) {
-			return boundaryExportRejected
-		}
-	}
-	created := make([]string, 0, 2)
-	committed := false
-	defer func() {
-		if !committed {
-			for _, p := range created {
-				_ = os.Remove(p)
-			}
-		}
-	}()
-	for _, item := range []struct {
-		path string
-		data []byte
-	}{{jsonPath, jsonData}, {htmlPath, htmlData}} {
-		f, err := os.OpenFile(item.path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
-		if err != nil {
-			return boundaryExportRejected
-		}
-		created = append(created, item.path)
-		n, writeErr := f.Write(item.data)
-		if writeErr == nil && n != len(item.data) {
-			writeErr = io.ErrShortWrite
-		}
-		if writeErr == nil {
-			writeErr = f.Sync()
-		}
-		closeErr := f.Close()
-		if writeErr != nil || closeErr != nil {
-			return boundaryExportRejected
-		}
-	}
-	committed = true
 	return nil
 }
