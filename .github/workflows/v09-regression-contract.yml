@@ -1,0 +1,72 @@
+name: Firedoor v0.9 synthetic regression gate
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v09-synthetic-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  synthetic-regression-contract:
+    name: v09 synthetic boundary contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Install Go from the module requirement
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Focused regression unit tests and formatting
+        shell: bash
+        run: |
+          unformatted="$(gofmt -l internal/regression/*.go scripts/v09/cmd/fixturegate/*.go)"
+          test -z "$unformatted" || { echo "$unformatted"; exit 1; }
+          go test ./internal/regression/...
+          go vet ./internal/regression/...
+
+      - name: Synthetic intact case must match
+        shell: bash
+        run: |
+          output="$(go run ./scripts/v09/cmd/fixturegate --fixture intact)"
+          echo "$output"
+          grep -Fq '"verdict": "MATCH"' <<< "$output"
+
+      - name: Synthetic weakened case must be caught
+        shell: bash
+        run: |
+          set +e
+          output="$(go run ./scripts/v09/cmd/fixturegate --fixture weakened 2>&1)"
+          status=$?
+          set -e
+          echo "$output"
+          test "$status" -eq 1
+          grep -Fq '"verdict": "REGRESSION"' <<< "$output"
+
+      - name: Synthetic missing evidence must not pass
+        shell: bash
+        run: |
+          set +e
+          output="$(go run ./scripts/v09/cmd/fixturegate --fixture missing 2>&1)"
+          status=$?
+          set -e
+          echo "$output"
+          test "$status" -eq 1
+          grep -Fq '"verdict": "INCONCLUSIVE"' <<< "$output"
+
+# Slice 9A explicitly does not start an ephemeral cluster or run Terraform
+# apply/test. The existing repository Go/Terraform/console quality lanes remain
+# authoritative for those tools. Real kind regression follows in slices 9B-9C.
