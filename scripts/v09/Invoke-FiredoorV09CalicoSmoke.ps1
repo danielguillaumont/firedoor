@@ -10,6 +10,8 @@
   -VerifyNetworkPolicy adds a fixed ingress-only policy test to positive controls.
   -VerifyLiveRegression additionally weakens and restores that policy in a
   disposable test cluster; it never targets the existing firedoor-local cluster.
+  -VerifyGoVerdicts runs the same live proof AND evaluates typed Go verdicts at
+  protected, weakened and restored phases. Synthetic Go fixtures stay separate.
   CNI readiness alone is NOT proof of NetworkPolicy enforcement.
   Windows PowerShell 5.1. Never runs Terraform or changes firedoor-local.
   Forced termination or host failure can prevent cleanup.
@@ -21,6 +23,7 @@ param(
     [switch]$VerifyLiveBaseline,
     [switch]$VerifyNetworkPolicy,
     [switch]$VerifyLiveRegression,
+    [switch]$VerifyGoVerdicts,
     [string]$CalicoManifestSha256 = ""
 )
 
@@ -44,6 +47,7 @@ $name = "firedoor-v09-$nonce"
 $context = "kind-$name"
 $runDir = Join-Path ([System.IO.Path]::GetTempPath()) $name
 $kubeconfig = Join-Path $runDir "kubeconfig"
+$livegateExe = Join-Path $runDir "firedoor-livegate.exe"
 
 function Assert-LastExit([string]$Action) {
     if ($LASTEXITCODE -ne 0) {
@@ -308,6 +312,60 @@ function Assert-RegressionPolicyState([string]$Mode, [string]$ExpectedUID) {
     }
 }
 
+# The Go evaluator does no network I/O. Every input value below is supplied
+# only after the guarded live driver has verified cluster identity, policy
+# UID/rules, positive health controls, and the current in-pod probe outcome.
+# Inputs and binary are temporary and removed with the generated cluster.
+function Invoke-LiveGoVerdict([string]$Phase, [string]$Target, [string]$Observed, [string]$PolicyUID) {
+    if (-not $VerifyGoVerdicts -or -not $Execute -or
+        @('protected','weakened','restored') -cnotcontains $Phase -or
+        @('service','pod_ip') -cnotcontains $Target -or
+        @('reachable','unreachable','not_observed') -cnotcontains $Observed -or
+        [string]::IsNullOrWhiteSpace($PolicyUID)) {
+        throw 'Unapproved live verdict request. Stop.'
+    }
+    $mode = if ($Phase -eq 'weakened') { 'all_namespace_pods' } else { 'trusted_only' }
+    $observation = [ordered]@{
+        schema_version = 'firedoor.v09.regression.live.v1'
+        source = 'guarded_kind_calico_probe'
+        run_id = $name
+        cluster = $name
+        context = $context
+        namespace = $baselineNamespace
+        policy_name = 'allow-trusted-to-data'
+        policy_uid = $PolicyUID
+        phase = $Phase
+        policy_mode = $mode
+        route_id = 'edge-to-data'
+        target = $Target
+        transport = 'HTTP/TCP'
+        port = 8080
+        observed = $Observed
+        trusted_healthy = $true
+        edge_exec_healthy = $true
+        cni_ready = $true
+        policy_verified = $true
+    }
+    $path = Join-Path $runDir ("live-observation-$Phase-$Target.json")
+    $utf8 = [System.Text.UTF8Encoding]::new($false)
+    [IO.File]::WriteAllText($path, ($observation | ConvertTo-Json -Depth 4 -Compress), $utf8)
+    $raw = @(& $livegateExe --input $path)
+    $exitCode = $LASTEXITCODE
+    try { $report = ($raw -join "`n") | ConvertFrom-Json -ErrorAction Stop }
+    catch { throw 'Go livegate did not return valid JSON. Stop.' }
+    $expectedVerdict = if ($Phase -eq 'weakened') { 'REGRESSION' } else { 'MATCH' }
+    $expectedCode = if ($Phase -eq 'weakened') { 10 } else { 0 }
+    if ($exitCode -ne $expectedCode -or $report.verdict -cne $expectedVerdict -or
+        $report.schema_version -cne 'firedoor.v09.regression.live.v1' -or
+        $report.source -cne 'guarded_kind_calico_probe' -or
+        $report.phase -cne $Phase -or $report.target -cne $Target -or
+        $report.cluster -cne $name -or $report.policy_uid -cne $PolicyUID -or
+        $report.observed -cne $Observed) {
+        throw "Unexpected Go live verdict/exit for $Phase/$Target (exit $exitCode). Stop."
+    }
+    Write-Host "LIVE_GO_VERDICT: phase=$Phase target=$Target verdict=$expectedVerdict exit=$exitCode"
+}
+
 function Assert-IsolatedKubeconfig([string]$Path, [string]$ExpectedContext) {
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
         throw "Dedicated kubeconfig missing. Stop."
@@ -324,8 +382,11 @@ function Assert-IsolatedKubeconfig([string]$Path, [string]$ExpectedContext) {
     }
 }
 
-if (($VerifyLiveBaseline -and ($VerifyNetworkPolicy -or $VerifyLiveRegression)) -or
-    ($VerifyNetworkPolicy -and $VerifyLiveRegression)) {
+$selectedLiveModes = 0
+foreach ($mode in @($VerifyLiveBaseline, $VerifyNetworkPolicy, $VerifyLiveRegression, $VerifyGoVerdicts)) {
+    if ($mode) { $selectedLiveModes++ }
+}
+if ($selectedLiveModes -gt 1) {
     throw 'Select exactly one live verification mode. Stop.'
 }
 if ($VerifyNetworkPolicy -and -not $Execute) {
@@ -333,6 +394,9 @@ if ($VerifyNetworkPolicy -and -not $Execute) {
 }
 if ($VerifyLiveRegression -and -not $Execute) {
     throw 'The live deliberate-regression verification requires explicit -Execute. Stop.'
+}
+if ($VerifyGoVerdicts -and -not $Execute) {
+    throw 'Go live-verdict verification requires explicit -Execute. Stop.'
 }
 if ($VerifyLiveBaseline -and -not $Execute) {
     throw 'The live workload baseline requires explicit -Execute. Stop.'
@@ -356,13 +420,13 @@ if ($manifestFull.StartsWith($repoPrefix, [StringComparison]::OrdinalIgnoreCase)
     throw "Calico manifest must not be inside source repository. Stop."
 }
 
-if ($VerifyNetworkPolicy -or $VerifyLiveRegression) {
+if ($VerifyNetworkPolicy -or $VerifyLiveRegression -or $VerifyGoVerdicts) {
     Assert-NetworkPolicyFixture $networkPolicyManifest $networkPolicySha256
 }
-if ($VerifyLiveRegression) {
+if ($VerifyLiveRegression -or $VerifyGoVerdicts) {
     Assert-WeakenedPolicyFixture $weakenedPolicyManifest $weakenedPolicySha256
 }
-if ($VerifyLiveBaseline -or $VerifyNetworkPolicy -or $VerifyLiveRegression) {
+if ($VerifyLiveBaseline -or $VerifyNetworkPolicy -or $VerifyLiveRegression -or $VerifyGoVerdicts) {
     if (-not (Test-Path -LiteralPath $baselineManifest -PathType Leaf)) {
         throw 'Expected v0.9C1 workload manifest missing. Stop.'
     }
@@ -462,6 +526,21 @@ $completed = $false
 $cleanupSuccess = $false
 New-Item -ItemType Directory -Path $runDir -ErrorAction Stop | Out-Null
 try {
+    if ($VerifyGoVerdicts) {
+        if (-not (Get-Command go -CommandType Application -ErrorAction SilentlyContinue)) {
+            throw 'Go executable required for typed live verdict mode. Stop.'
+        }
+        Push-Location $repo
+        try {
+            & go build -o $livegateExe ./scripts/v09/cmd/livegate
+            Assert-LastExit 'Build isolated livegate binary'
+        }
+        finally { Pop-Location }
+        if (-not (Test-Path -LiteralPath $livegateExe -PathType Leaf)) {
+            throw 'Go livegate executable missing after build. Stop.'
+        }
+        Write-Host 'PASS: Typed Go livegate built in disposable runtime directory.'
+    }
     Write-Host "Creating only disposable Calico kind cluster $name."
     $attemptedCreate = $true
     $arguments = 'create cluster --name "' + $name + '" --config "' + $config +
@@ -524,7 +603,7 @@ try {
     Write-Host 'PASS: Calico DaemonSet ready (2/2), both kind nodes Ready.'
     Write-Host 'LIMIT: CNI readiness alone is NOT live NetworkPolicy enforcement proof.'
 
-    if ($VerifyLiveBaseline -or $VerifyNetworkPolicy -or $VerifyLiveRegression) {
+    if ($VerifyLiveBaseline -or $VerifyNetworkPolicy -or $VerifyLiveRegression -or $VerifyGoVerdicts) {
         # This namespace exists only in this freshly created, identity-checked cluster.
         # There must be NO policy: this is a positive-control test, not denial proof.
         Write-Host "Creating fixed positive-control workloads in $baselineNamespace only."
@@ -588,7 +667,7 @@ try {
             }
         }
         Write-Host 'PASS: 9C1 positive baseline (4/4 HTTP checks) verified.'
-        if ($VerifyNetworkPolicy -or $VerifyLiveRegression) {
+        if ($VerifyNetworkPolicy -or $VerifyLiveRegression -or $VerifyGoVerdicts) {
             # This is a single fixed ingress-only rule. Verify the policy API
             # interpretation rather than trusting kubectl create alone.
             Write-Host 'Creating hash-sealed allow-trusted-to-data NetworkPolicy.'
@@ -646,8 +725,19 @@ try {
                 throw 'Edge client is not responding to exec; denial is inconclusive. Stop.'
             }
             Write-Host 'PASS: Edge-client remains executable; denied traffic is not an absent pod.'
+            if ($VerifyGoVerdicts) {
+                Assert-RegressionPolicyState 'protected' $protectedUID
+                $targets = @(
+                    @{ name = 'service'; url = 'http://data.firedoor-v09c1.svc.cluster.local:8080/' },
+                    @{ name = 'pod_ip'; url = "http://${targetIP}:8080/" }
+                )
+                foreach ($target in $targets) {
+                    Wait-EdgeBlocked $target.url
+                    Invoke-LiveGoVerdict 'protected' $target.name 'unreachable' $protectedUID
+                }
+            }
 
-            if ($VerifyLiveRegression) {
+            if ($VerifyLiveRegression -or $VerifyGoVerdicts) {
                 Write-Host 'WEAKENING: Updating the SAME live policy to allow all namespace pods.'
                 & kubectl --kubeconfig $kubeconfig --context $context `
                     --request-timeout=45s apply -f $weakenedPolicyManifest
@@ -664,6 +754,10 @@ try {
                     Wait-EdgeRestored $url
                     Assert-TracedSuccess 'trusted-client' $url
                     Write-Host "DETECTED: edge-client unexpectedly reachable under weakened policy: $url"
+                    if ($VerifyGoVerdicts) {
+                        $routeTarget = if ($url -match '\.svc\.cluster\.local:') { 'service' } else { 'pod_ip' }
+                        Invoke-LiveGoVerdict 'weakened' $routeTarget 'reachable' $protectedUID
+                    }
                 }
                 Write-Host 'PASS: Deliberate boundary regression demonstrated (edge reachable 2/2).'
 
@@ -678,9 +772,15 @@ try {
                 )) {
                     Wait-EdgeBlocked $url
                     Write-Host "PASS: repaired policy re-blocked edge; trusted healthy: $url"
+                    if ($VerifyGoVerdicts) {
+                        $routeTarget = if ($url -match '\.svc\.cluster\.local:') { 'service' } else { 'pod_ip' }
+                        Invoke-LiveGoVerdict 'restored' $routeTarget 'unreachable' $protectedUID
+                    }
                 }
                 Write-Host 'PASS: Protected boundary restored (edge blocked 2/2).'
-                Write-Host 'LIMITATION: 9D1 demonstrates regression/recovery; typed live Go verdict and CI gating follow in 9D2/9F.'
+                if (-not $VerifyGoVerdicts) {
+                    Write-Host 'LIMITATION: 9D1 demonstrates regression/recovery; typed live Go verdict and CI gating follow in 9D2/9F.'
+                }
             }
 
             & kubectl --kubeconfig $kubeconfig --context $context `
@@ -737,7 +837,11 @@ finally {
     }
 }
 if (-not $completed -or -not $cleanupSuccess) { throw 'CNI smoke or cleanup incomplete. Stop.' }
-if ($VerifyLiveRegression) {
+if ($VerifyGoVerdicts) {
+    Write-Host 'PASS: Firedoor v0.9D2 typed Go live verdicts (2 MATCH + 2 REGRESSION + 2 MATCH) and cleanup.'
+    Write-Host 'LIMITATION: CI does not yet provision a live disposable cluster.'
+}
+elseif ($VerifyLiveRegression) {
     Write-Host 'PASS: Firedoor v0.9D1 deliberate policy regression, repair and cleanup.'
     Write-Host 'NOTE: This is not yet Go live-evaluator or CI gating evidence.'
 }
