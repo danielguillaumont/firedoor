@@ -1,0 +1,13 @@
+{
+  "schema_version": "firedoor.v09.drift.snapshot.v1",
+  "source": "guarded_kind_calico_api",
+  "run_id": "firedoor-v09-abcdef123456",
+  "cluster": "firedoor-v09-abcdef123456",
+  "context": "kind-firedoor-v09-abcdef123456",
+  "namespace": "firedoor-v09c1",
+  "policy_name": "allow-trusted-to-data",
+  "observation_state": "unavailable",
+  "policy_uid": "",
+  "resource_version": "",
+  "spec": null
+}
