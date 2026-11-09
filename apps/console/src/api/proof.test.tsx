@@ -37,6 +37,7 @@ const approvedCapabilities = () => ({ schema_version: SCHEMA, mode: 'approved_de
     { name: 'control_catalog', availability: 'available', path: '/api/v1/control-catalog' },
     { name: 'historical_environment_snapshot', availability: 'available', path: '/api/v1/environment-snapshot' },
     { name: 'historical_activity', availability: 'available', path: '/api/v1/historical-activity' },
+    { name: 'historical_containment_map', availability: 'not_enabled' },
   ] });
 
 describe('approved historical Proof Lens UI and API contracts', () => {

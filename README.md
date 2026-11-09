@@ -4,7 +4,7 @@
 
 **Firedoor is a local-first Kubernetes security engineering lab and evidence inspection desk.** It combines a Go security CLI, a dedicated kind/Calico testbed, Terraform-managed configuration, bounded network observations, and a React console. Its core design rule is simple: **a security control's intention, a Kubernetes configuration, an observed connection, and proof of enforcement are not the same thing.**
 
-> **Current status — November 6, 2026:** The **v0.6 read-only console** is implemented and locally validated on `feat/v06-console` through the 6E2B screenshot checkpoint (`f693257`). The feature branch has **not yet completed its final documentation/PR/merge review**. This is a controlled educational/portfolio project, **not** a production scanner, continuously running monitor, independent attestation, or certified security assessment.
+> **Current status — November 9, 2026:** The **v0.6 read-only console** was merged to `main` through PR #7. **v0.7 Containment Map** development is underway on `feat/v07-containment-map` (through 7E2B, `5660680`, with green Go, React and Terraform CI). The v0.7 feature branch has **not been merged or released**. This is a controlled educational/portfolio project, **not** a production scanner, continuously running monitor, independent attestation, or certified security assessment.
 
 ## See the system in action
 
@@ -33,12 +33,19 @@
 
 These screenshots contain **no private historical report** and can be reproduced from a clean local clone. Optional historical views require separately vetted, Git-ignored evidence and are intentionally **not** included in this public gallery. See the [demo guide](docs/v06-console-demo-guide.md) for review criteria.
 
-The console is designed to make evidence provenance, unknowns, and security limits as visible as the results. It has six primary workspaces plus a detailed API capabilities screen.
+### v0.7 Containment Map — development preview (feature branch)
+
+The new **Containment Map** shows three **declared** lab zones and six **planning-only** directional routes for baseline and hardened profiles. Its selection highlight is not a packet trace. All routes remain **NOT ASSESSED** until separately collected evidence can support an appropriately limited conclusion. The optional **Saved network observations** section remains locked by default; even an approved historical readout cannot establish independent NetworkPolicy enforcement. A green local API indicator is *process health*, not Kubernetes health.
+
+From a default-mode local instance, open [the Containment Map preview](http://127.0.0.1:5173/?view=containment), or use **Containment Map** in the sidebar. The fixed `?view=containment` query selects an initial screen only; it does not authorize network requests, historical evidence, or data collection. A reproducible *review-only* browser screenshot can be captured on Windows with `scripts/v07/Capture-FiredoorV07Default.ps1` after starting the ordinary Go API and Vite. It is saved in Pictures, outside Git. **Only add a sanitized screenshot to the public README after individual review.** See [v0.7 capture and PR-readiness instructions](docs/v07-containment-map-slice7e2c.md).
+
+The console is designed to make evidence provenance, unknowns, and security limits as visible as the results. It has seven primary workspaces plus a detailed API capabilities screen.
 
 | Workspace | What you can inspect | What it **doesn't** claim |
 | --- | --- | --- |
 | **Overview** | Local API health, scenario contract count, feature availability | Cluster health, scenario execution |
 | **Scenarios** | Five versioned FD-001–FD-005 *planning* contracts | Certified attack simulations or pass/fail results |
+| **Containment Map (v0.7 branch)** | Three declared zones, six directional planning contracts and optional separately gated historical readout | Measured current connectivity, applied policy, or verified enforcement |
 | **Proof Lens** | Explicitly approved, detached historical summary | Independently authenticated containment proof |
 | **Controls** | Six Go-backed security-control **definitions** | Live control findings or a security score |
 | **Environment** | Approved historical Kubernetes snapshot with capture provenance | Current cluster inventory or verified enforcement |
@@ -141,7 +148,8 @@ The diagram is a conceptual workflow, **not an automatic job graph**. Importing 
 | **v0.3** verification | Six fixed-route observations matched the hardened plan | Offline verification of saved JSON, not continuous or authenticated attestation |
 | **v0.4** attribution | Two historical A/B/A witnesses observed unreachable → reachable → unreachable, with recovery checks | Network observations and recovery, not independently proven causation |
 | **v0.5** Proof Lens | Receipt, snapshot and witness context combined with **INCONCLUSIVE** verdict | Historical artifacts are not a single causal proof chain |
-| **v0.6** console | Six workspace views, fixed read-only API, consent-gated detached history, 47 passing frontend tests | Local development preview; no scenario certification or live cluster inspection through HTTP |
+| **v0.6** console | Read-only workspace views, fixed local API and consent-gated detached history; PR #7 merged | No scenario certification or live cluster inspection through HTTP |
+| **v0.7** Containment Map (feature branch) | Three declared zones, six interactive planning routes, optional approval-gated historical observations; 81 frontend tests at 7E2B | Historical connectivity is not authenticated policy enforcement; v0.7 is not merged |
 
 The **five FD scenario contracts remain NOT TESTED** in the v0.6 browser. The control catalog shows definitions, **not** the historical v0.2 audit results. Detailed reproducibility notes: [v0.1](docs/v01-validation-summary.md), [v0.2](docs/v02-validation-summary.md), [v0.3](docs/v03-validation-summary.md), [v0.5](docs/v05-validation-summary.md), and [v0.6 slice history](docs/v06-console-slice6e1b.md).
 
@@ -157,15 +165,15 @@ The **five FD scenario contracts remain NOT TESTED** in the v0.6 browser. The co
 | `apps/console/` | React 18, TypeScript, Vite and Vitest read-only inspection desk |
 | `infrastructure/bootstrap/`, `infrastructure/terraform/` | Dedicated kind/Calico setup and single-state Terraform testbed |
 | `scenarios/FD-001`–`FD-005` | Planning-only scenario contracts |
-| `scripts/v06/` | Source validation gates; no automatic live environment mutations |
+| `scripts/v06/`, `scripts/v07/` | Source validation gates and opt-in default-mode screenshot capture; no automatic live environment mutations |
 | `docs/`, `.github/workflows/` | Architecture, safety boundaries, historical milestone evidence and source CI |
 
 ## Safety, scope and next work
 
-- The console has **seven fixed read-only HTTP API routes**, with bounded JSON decoding, no credentials, redirects or implicit history fetches. Local loopback reduces exposure but is **not** user authentication.
+- The default console uses a fixed GET-only local API allowlist; v0.7 adds two planning-map routes and a separately gated historical-map route. No credentials, redirects, or implicit historical reads are permitted. Local loopback reduces exposure but is **not** user authentication.
 - Only the dedicated owned lab may be used for historical live probes or policy experiments, each requiring their own explicit safeguards. Never point these workflows at third-party or production workloads.
 - Do not commit `docs/evidence/local/`, `.tfstate`, generated `.tfplan`, kubeconfig, credentials, or local receipts. A clean clone intentionally **cannot** reproduce your private historical timeline without a separate vetted report.
 - The UI does not implement Terraform `apply`, admission enforcement, live Kubernetes inventory, scenario execution, continuous scanning, or measured drift.
-- **Next:** v0.6 documentation, demo screenshot curation, final PR review and CI checks; later Containment Map and stronger independently attributable security demonstrations are roadmap work, not shipped features.
+- **Next:** v0.7 default-mode screenshot review, accessibility and narrow-viewport smoke checks, updated documentation, and a green feature-branch PR readiness review. Independent policy attribution remains future research, not a shipped feature.
 
 Read [START-HERE.md](START-HERE.md) for the workstation entry point, [SECURITY.md](SECURITY.md) for the trust policy, and the [original master plan](docs/planning/Firedoor_Master_Build_Plan_v1.1.pdf) for design goals. Built for controlled security engineering research. [MIT License](LICENSE).

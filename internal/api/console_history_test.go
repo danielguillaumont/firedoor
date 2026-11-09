@@ -53,7 +53,7 @@ func TestV06HistoryRequiresApprovedProofAndDoesNotAdvertiseByDefault(t *testing.
 	if err := json.Unmarshal(w.Body.Bytes(), &cap); err != nil {
 		t.Fatal(err)
 	}
-	if len(cap.Capabilities) != 9 || cap.Capabilities[8].Name != "historical_activity" || cap.Capabilities[8].Availability != "not_enabled" || cap.Capabilities[8].Path != "" {
+	if len(cap.Capabilities) != 10 || cap.Capabilities[8].Name != "historical_activity" || cap.Capabilities[8].Availability != "not_enabled" || cap.Capabilities[8].Path != "" {
 		t.Fatal("default capability leaked")
 	}
 }

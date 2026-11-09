@@ -1,3 +1,5 @@
+import { parsePlanningContainmentMap, type MapProfile } from './containment';
+import { parseHistoricalContainmentMap } from './containmentHistorical';
 import { parseCapabilities, parseHealth, parseScenarios, parseProofSummary, parseControlCatalog, parseHistoricalEnvironment, parseHistoricalActivity } from './contracts';
 
 export const endpoints = {
@@ -8,6 +10,9 @@ export const endpoints = {
   controls: '/api/v1/control-catalog',
   environment: '/api/v1/environment-snapshot',
   history: '/api/v1/historical-activity',
+  baselineMap: '/api/v1/containment-map/baseline',
+  hardenedMap: '/api/v1/containment-map/hardened',
+  historicalMap: '/api/v1/containment-map/historical',
 } as const;
 
 // All seven local API responses have a small, reviewed JSON contract. A
@@ -89,3 +94,18 @@ export const loadHistoricalEnvironment = (signal: AbortSignal) => getJSON(endpoi
 
 // No automatic access: the History page requests only after explicit user action.
 export const loadHistoricalActivity = (signal: AbortSignal) => getJSON(endpoints.history, parseHistoricalActivity, signal);
+
+// Fixed planning-only endpoints. Caller cannot supply an arbitrary path or
+// trigger historical evidence access through this loader.
+export function loadPlanningContainmentMap(profile: MapProfile, signal: AbortSignal) {
+  if (profile !== 'baseline' && profile !== 'hardened') {
+    return Promise.reject(new Error('Unapproved containment map profile'));
+  }
+  const path = profile === 'baseline' ? endpoints.baselineMap : endpoints.hardenedMap;
+  return getJSON(path, (data) => parsePlanningContainmentMap(data, profile), signal);
+}
+
+// Historical route is called only after explicit user action and an advertised
+// startup-approved capability. Never auto-load or combine with planning data.
+export const loadApprovedHistoricalContainmentMap = (signal: AbortSignal) =>
+  getJSON(endpoints.historicalMap, parseHistoricalContainmentMap, signal);

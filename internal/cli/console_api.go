@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/danielguillaumont/firedoor/internal/api"
+	"github.com/danielguillaumont/firedoor/internal/containmentmap"
+	"github.com/danielguillaumont/firedoor/internal/liveverify"
 	"github.com/danielguillaumont/firedoor/internal/prooflens"
 	"github.com/spf13/cobra"
 )
@@ -25,13 +27,21 @@ func newConsoleAPICommand() *cobra.Command {
 	}
 	var enableApprovedProof bool
 	var consent string
+	var enableHistoricalMap bool
+	var historicalMapProfile string
+	var historicalMapConsent string
 	serve := &cobra.Command{
-		Use: "serve", Short: "Serve offline contracts and optional approved detached proof on http://127.0.0.1:8787 (Ctrl+C to stop)",
+		Use: "serve", Short: "Serve local read-only contracts and independently approved historical views on http://127.0.0.1:8787 (Ctrl+C to stop)",
 		Args: cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error { return serveConsoleAPI(cmd, enableApprovedProof, consent) },
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return serveConsoleAPI(cmd, enableApprovedProof, consent, historicalMapOptions{enableHistoricalMap, historicalMapProfile, historicalMapConsent})
+		},
 	}
 	serve.Flags().BoolVar(&enableApprovedProof, "enable-approved-proof", false, "Opt in to one previously saved, verified, Git-ignored detached JSON summary (no collection)")
 	serve.Flags().StringVar(&consent, "consent", "", "Exact operator approval for importing the fixed local detached report")
+	serve.Flags().BoolVar(&enableHistoricalMap, "enable-historical-map", false, "Explicitly enable one independently reviewed saved v0.3 six-route suite from fixed Git-ignored path")
+	serve.Flags().StringVar(&historicalMapProfile, "historical-map-profile", "", "Operator-confirmed saved v0.3 profile (baseline or hardened)")
+	serve.Flags().StringVar(&historicalMapConsent, "historical-map-consent", "", "Exact explicit startup approval; not authentication")
 	// Inspection is an explicit operator action. It validates the same fixed,
 	// ignored detached JSON as serve, without binding any socket or exporting it.
 	var inspectionConsent string
@@ -63,10 +73,36 @@ func inspectConsoleApprovedProof(cmd *cobra.Command, consent string) error {
 	return err
 }
 
-func serveConsoleAPI(cmd *cobra.Command, enableApprovedProof bool, consent string) error {
+type historicalMapOptions struct {
+	enabled bool
+	profile string
+	consent string
+}
+
+func serveConsoleAPI(cmd *cobra.Command, enableApprovedProof bool, consent string, history historicalMapOptions) error {
 	var handler http.Handler = api.NewHandler()
 	if !enableApprovedProof && consent != "" {
 		return errors.New("consent requires explicit --enable-approved-proof")
+	}
+	if enableApprovedProof && history.enabled {
+		return errors.New("separate historical report and Containment Map approvals cannot be combined")
+	}
+	if !history.enabled && (history.profile != "" || history.consent != "") {
+		return errors.New("historical map settings require explicit --enable-historical-map")
+	}
+	if history.enabled {
+		if history.consent != containmentmap.ApprovedHistoricalMapConsent ||
+			(history.profile != "baseline" && history.profile != "hardened") {
+			return errors.New("historical Containment Map requires exact approval and an operator-confirmed supported profile")
+		}
+		saved, err := containmentmap.LoadApprovedHistoricalMapForHTTP(".", liveverify.Profile(history.profile), history.consent)
+		if err != nil {
+			return errors.New("approved historical Containment Map unavailable or rejected; API not started")
+		}
+		handler, err = api.NewHandlerWithApprovedHistoricalMap(&saved)
+		if err != nil {
+			return errors.New("approved historical Containment Map rejected; API not started")
+		}
 	}
 	if enableApprovedProof {
 		// No arbitrary path flag. Import only the fixed ignored source JSON;
@@ -100,7 +136,11 @@ func serveConsoleAPI(cmd *cobra.Command, enableApprovedProof bool, consent strin
 		banner += fmt.Sprintf("GET http://%s/api/v1/proof-summary (approved detached historical summary only)\nGET http://%s/api/v1/environment-snapshot (historical, not live)\nGET http://%s/api/v1/historical-activity (not run history or drift proof)\n", api.ListenAddress, api.ListenAddress, api.ListenAddress)
 	}
 	banner += fmt.Sprintf("GET http://%s/api/v1/control-catalog (definitions only, not findings)\n", api.ListenAddress)
-	banner += "No Terraform, Kubernetes, SQLite, or proof collection. Ctrl+C to stop.\n"
+	banner += fmt.Sprintf("GET http://%s/api/v1/containment-map/baseline (planning zones only)\nGET http://%s/api/v1/containment-map/hardened (planning zones only)\n", api.ListenAddress, api.ListenAddress)
+	if history.enabled {
+		banner += fmt.Sprintf("GET http://%s/api/v1/containment-map/historical (approved saved v0.3 network observations; origin and enforcement not verified)\n", api.ListenAddress)
+	}
+	banner += "No Terraform, Kubernetes, SQLite, live probes, or proof collection. Ctrl+C to stop.\n"
 	if _, err := fmt.Fprint(cmd.OutOrStdout(), banner); err != nil {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
