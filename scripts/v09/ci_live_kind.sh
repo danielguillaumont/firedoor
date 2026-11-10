@@ -96,6 +96,10 @@ current="$(kubectl --kubeconfig "$kubeconfig" config current-context)"
 kubectl --kubeconfig "$kubeconfig" --context "$context" apply -f "$calico"
 kubectl --kubeconfig "$kubeconfig" --context "$context" -n kube-system rollout status ds/calico-node --timeout=240s
 kubectl --kubeconfig "$kubeconfig" --context "$context" wait --for=condition=Ready nodes --all --timeout=180s
+# Node readiness does not imply DNS/Service routing readiness. Require the
+# disposable cluster's built-in DNS and kube-proxy before HTTP baseline probes.
+kubectl --kubeconfig "$kubeconfig" --context "$context" -n kube-system rollout status deployment/coredns --timeout=240s
+kubectl --kubeconfig "$kubeconfig" --context "$context" -n kube-system rollout status daemonset/kube-proxy --timeout=240s
 python3 "$repo/scripts/v09/ci_live_boundary.py" \
   --cluster "$name" --kubeconfig "$kubeconfig" --repo "$repo" \
   --livegate "$run_dir/livegate" --driftgate "$run_dir/driftgate"

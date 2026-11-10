@@ -62,7 +62,70 @@ def self_test():
         else:
             raise AssertionError("accepted invalid policy item")
     require(APPROVED != WEAKENED, "approved and weakened spec identical")
-    print("PASS: Firedoor 9F1 offline parser/identity negative tests")
+
+    routes = {"service": "service-url", "pod_ip": "pod-ip-url"}
+    seen = []
+    emitted = []
+    iteration = [0]
+    def settling_probe(client, url):
+        seen.append((iteration[0], client, url))
+        return (iteration[0] > 0, "not-ready")
+    def next_round(_):
+        iteration[0] += 1
+    verify_positive_baseline(settling_probe, lambda: True, routes, attempts=3, delay=0,
+                             sleep=next_round, emit=emitted.append)
+    require(len(seen) == 8, "baseline did not require four fresh positives after startup")
+    require(any("4/4 HTTP probes passed" in line for line in emitted), "baseline success missing")
+    try:
+        verify_positive_baseline(lambda client, url: (False, "not-ready"), lambda: True, routes,
+                                 attempts=2, delay=0, sleep=lambda _: None, emit=lambda _: None)
+    except GateFailure as exc:
+        require("positive baseline failed" in str(exc), "unexpected persistent failure reason")
+    else:
+        raise AssertionError("permanent baseline failure was accepted")
+    try:
+        verify_positive_baseline(lambda client, url: (client != "edge-client" or url != "service-url", "service not ready"),
+                                 lambda: True, routes, attempts=2, delay=0,
+                                 sleep=lambda _: None, emit=lambda _: None)
+    except GateFailure as exc:
+        require("service/edge-client" in str(exc), "three-of-four positives were accepted")
+    else:
+        raise AssertionError("incomplete positive baseline was accepted")
+    policy_checks = [0]
+    def policy_changes_during_retry():
+        policy_checks[0] += 1
+        return policy_checks[0] == 1
+    try:
+        verify_positive_baseline(lambda client, url: (False, "not ready"), policy_changes_during_retry,
+                                 routes, attempts=2, delay=0, sleep=lambda _: None, emit=lambda _: None)
+    except GateFailure as exc:
+        require("unexpected NetworkPolicy" in str(exc), "unexpected policy on retry was accepted")
+    else:
+        raise AssertionError("policy drift during settling was accepted")
+    from types import SimpleNamespace
+    fake = object.__new__(Live)
+    fake.kubectl = lambda *args, **kwargs: SimpleNamespace(returncode=0, stdout="WRONG_CONTENT", stderr="")
+    try:
+        fake.baseline_probe("edge-client", "service-url")
+    except GateFailure as exc:
+        require("without expected marker" in str(exc), "wrong success content was accepted")
+    else:
+        raise AssertionError("success without marker was accepted")
+    try:
+        verify_positive_baseline(lambda client, url: (True, "ok"), lambda: False, routes,
+                                 attempts=2, delay=0, sleep=lambda _: None, emit=lambda _: None)
+    except GateFailure as exc:
+        require("unexpected NetworkPolicy" in str(exc), "unexpected policy was not rejected")
+    else:
+        raise AssertionError("baseline with unapproved policy was accepted")
+    try:
+        verify_positive_baseline(lambda client, url: (True, "ok"), lambda: True,
+                                 {"service": "service-url"}, attempts=1, delay=0)
+    except GateFailure as exc:
+        require("service and Pod IP" in str(exc), "missing Pod IP control was accepted")
+    else:
+        raise AssertionError("missing positive control was accepted")
+    print("PASS: Firedoor 9F1 offline parser/identity and fail-closed baseline readiness tests")
 
 
 def parse_list(doc):
@@ -86,6 +149,37 @@ def parse_list(doc):
         require(bool(re.fullmatch(r"[A-Za-z0-9._-]{1,128}", str(im.get("resourceVersion", "")))), "invalid resourceVersion")
         require(isinstance(item.get("spec"), dict), "missing policy spec")
     return items
+
+
+def verify_positive_baseline(probe, policy_absent, routes, attempts=20, delay=3, sleep=time.sleep, emit=print):
+    """Bounded startup settling; never treats a failed positive HTTP probe as healthy.
+
+    probe(client, url) returns (success: bool, failure_summary: str).
+    Each attempt must pass both clients through BOTH service and Pod IP routes.
+    """
+    require(set(routes) == {"service", "pod_ip"}, "baseline requires service and Pod IP targets")
+    require(isinstance(attempts, int) and 1 <= attempts <= 30, "invalid baseline retry limit")
+    require(delay >= 0, "invalid baseline delay")
+    last_failures = []
+    for round_no in range(1, attempts + 1):
+        require(policy_absent(), "baseline has unexpected NetworkPolicy")
+        failed = []
+        for target in ("service", "pod_ip"):
+            url = routes[target]
+            for client in ("trusted-client", "edge-client"):
+                success, detail = probe(client, url)
+                require(isinstance(success, bool), "baseline probe returned non-boolean outcome")
+                if not success:
+                    failed.append(f"{target}/{client}: {str(detail)[:180]}")
+        if not failed:
+            emit(f"CI_BASELINE: 4/4 HTTP probes passed in round {round_no}/{attempts}")
+            return
+        last_failures = failed
+        if round_no == 1 or round_no % 5 == 0 or round_no == attempts:
+            emit(f"CI_BASELINE_WAIT: round {round_no}/{attempts} failures={len(failed)} " + "; ".join(failed))
+        if round_no < attempts:
+            sleep(delay)
+    raise GateFailure("positive baseline failed after bounded readiness checks: " + "; ".join(last_failures))
 
 
 class Live:
@@ -152,6 +246,32 @@ class Live:
             raise GateFailure("successful client response without expected marker")
         return p.returncode == 0
 
+    def baseline_probe(self, client, url):
+        # Retain stderr during baseline startup diagnostics; the protected probes
+        # continue to use exec_client and unchanged policy-verdict logic.
+        p = self.kubectl("-n", NS, "exec", client, "--", "wget", "-q", "-T", "3", "-O", "-", url, timeout=18, ok=False)
+        if p.returncode == 0 and MARKER not in p.stdout:
+            raise GateFailure("successful baseline response without expected marker")
+        if p.returncode != 0:
+            stderr = " ".join(p.stderr.split())[-160:] or "no wget stderr"
+            return False, f"kubectl/wget exit {p.returncode}: {stderr}"
+        return True, "marker matched"
+
+    def baseline_diagnostics(self):
+        # Only describe resources inside the generated kind cluster. No writes.
+        for label, arguments in (
+            ("service", ("-n", NS, "get", "service", "data", "-o", "wide")),
+            ("endpoints", ("-n", NS, "get", "endpointslice", "-l", "kubernetes.io/service-name=data", "-o", "wide")),
+            ("kube-system", ("-n", "kube-system", "get", "pods", "-o", "wide")),
+            ("dns", ("-n", NS, "exec", "trusted-client", "--", "nslookup", "data." + NS + ".svc.cluster.local")),
+        ):
+            try:
+                outcome = self.kubectl(*arguments, timeout=25, ok=False)
+                details = " ".join((outcome.stdout + " " + outcome.stderr).split())[-900:]
+                print(f"CI_BASELINE_DIAG: {label} exit={outcome.returncode} {details}", flush=True)
+            except (OSError, subprocess.TimeoutExpired) as exc:
+                print(f"CI_BASELINE_DIAG: {label} unavailable: {str(exc)[:160]}", flush=True)
+
     def exec_healthy(self, client):
         return self.kubectl("-n", NS, "exec", client, "--", "sh", "-c", "echo FIREDOOR_EXEC_OK", timeout=15).stdout.strip() == "FIREDOOR_EXEC_OK"
 
@@ -215,9 +335,12 @@ class Live:
             for pod in ("data-server", "edge-client", "trusted-client"):
                 self.kubectl("-n", NS, "wait", "--for=condition=Ready", "pod/" + pod, "--timeout=180s", timeout=205)
             require(self.policy() is None, "baseline has unexpected policy")
-            for target, url in self.endpoints().items():
-                require(self.exec_client("trusted-client", url) and self.exec_client("edge-client", url), "positive baseline failed: " + target)
-            print("CI_BASELINE: 4/4 HTTP probes passed", flush=True)
+            try:
+                verify_positive_baseline(self.baseline_probe, lambda: self.policy() is None,
+                                         self.endpoints(), attempts=20, delay=3)
+            except GateFailure:
+                self.baseline_diagnostics()
+                raise
 
             self.kubectl("apply", "-f", str(protected))
             item = self.policy()
