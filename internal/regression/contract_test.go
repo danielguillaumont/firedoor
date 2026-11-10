@@ -79,7 +79,7 @@ func TestFixtureStrictParsing(t *testing.T) {
 		{"array", []byte(`[]`)},
 		{"unknown_key", change("unsafe_url", "https://example.org")},
 		{"missing_key", bytes.Replace(valid, []byte(`"port": 8080,`), nil, 1)},
-		{"duplicate_key", append(bytes.TrimSuffix(bytes.TrimSpace(valid), []byte("}")), []byte(`,"port":8080}`)...)},
+		{"duplicate_key", append(append([]byte(nil), bytes.TrimSuffix(bytes.TrimSpace(valid), []byte("}"))...), []byte(`,"port":8080}`)...)},
 		{"trailing", append(append([]byte(nil), valid...), []byte(`{}`)...)},
 		{"oversized", bytes.Repeat([]byte(" "), MaxFixtureBytes+1)},
 		{"bad_type", change("port", "8080")},
