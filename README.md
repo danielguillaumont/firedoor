@@ -60,3 +60,20 @@ Open `Downloads/Firedoor-v08-Synthetic-Review-README/SYNTHETIC-comparison.html` 
 **Status:** v0.8 Boundary Proof reporting and comparison merged into `main` in [PR #10](https://github.com/danielguillaumont/firedoor/pull/10), building on the v0.7 Containment Map ([PR #8](https://github.com/danielguillaumont/firedoor/pull/8)). Firedoor remains an actively developed engineering lab and portfolio demonstration—not a production scanner, continuous monitor, or certified security assessment.
 
 **Explore the engineering:** [v0.8 offline proof-report demo (synthetic)](docs/v08-boundary-proofs-slice8e2.md) · [Architecture](docs/architecture.md) · [Demo walkthrough](docs/v06-console-demo-guide.md) · [v0.7 implementation and validation](docs/v07-containment-map-slice7e2b.md) · [Safety boundaries](SECURITY.md) · [Milestone evidence](docs/v05-validation-summary.md)
+
+## v0.9 - Live NetworkPolicy regression lab
+
+**The v0.9 work is documented in [PR #12](https://github.com/danielguillaumont/firedoor/pull/12).** In addition to the v0.8 offline Boundary Proof demo, Firedoor now has a separately scoped **live Kubernetes regression test harness** for an isolated kind/Calico lab. This is not a claim that the read-only React console applies or continuously monitors NetworkPolicies.
+
+- **Behavioral proof:** A two-node disposable kind cluster runs a known-good HTTP server, trusted client, and edge client. Service and Pod IP probes establish positive connectivity before testing trusted-only ingress, intentional policy weakening, and restoration.
+- **Typed Go results:** live observations yield `MATCH`, `REGRESSION`, or `INCONCLUSIVE`; Kubernetes API policy-spec checks separately report `MATCH`, `DRIFT`, or `INCONCLUSIVE`. The test confirms missing policies and refuses unsupported or ambiguous API observations.
+- **Automated acceptance:** [Firedoor v0.9 live Kubernetes boundary](.github/workflows/v09-live-network-boundary.yml) uses GitHub Actions to provision a disposable test cluster, reject a deliberately weakened boundary, verify repair, and clean up. See the [CI evidence review](docs/v09-ci-evidence-review.md) and [release acceptance checklist](docs/v09-release-acceptance.md).
+
+For a non-mutating source check on Windows PowerShell 5.1, run:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass `
+    -File .\scripts\v09\Test-FiredoorV09Slice9F1.ps1
+```
+
+**Limits:** This validates a small, intentionally controlled test environment-not production infrastructure, a continuous Kubernetes monitor, Terraform state reconciliation, comprehensive policy coverage, or certified security enforcement. CI status must be inspected on the latest PR commit before release acceptance.
