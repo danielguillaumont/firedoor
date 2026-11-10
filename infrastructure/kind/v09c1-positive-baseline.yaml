@@ -1,0 +1,142 @@
+# Firedoor v0.9C1 — synthetic lab workloads, positive connectivity baseline only.
+# Intended ONLY for the generated disposable kind cluster with Calico v3.33.0.
+# No NetworkPolicy here: the next slice will test allowed vs denied traffic.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: firedoor-v09c1
+  labels:
+    app.kubernetes.io/part-of: firedoor
+    firedoor.dev/test-scope: disposable-v09c1
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: data-content
+  namespace: firedoor-v09c1
+data:
+  index.html: |
+    FIREDOOR_V09C1_DATA_OK
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: data-server
+  namespace: firedoor-v09c1
+  labels:
+    app: data-server
+    role: data
+spec:
+  automountServiceAccountToken: false
+  enableServiceLinks: false
+  terminationGracePeriodSeconds: 3
+  containers:
+    - name: httpd
+      image: busybox:1.36.1
+      imagePullPolicy: IfNotPresent
+      command: ["httpd", "-f", "-p", "8080", "-h", "/www"]
+      ports:
+        - containerPort: 8080
+          name: http
+      readinessProbe:
+        tcpSocket:
+          port: http
+        periodSeconds: 3
+        timeoutSeconds: 2
+        failureThreshold: 20
+      securityContext:
+        allowPrivilegeEscalation: false
+        runAsNonRoot: true
+        runAsUser: 10001
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop: ["ALL"]
+      resources:
+        requests:
+          cpu: 10m
+          memory: 16Mi
+        limits:
+          memory: 96Mi
+      volumeMounts:
+        - name: page
+          mountPath: /www
+          readOnly: true
+  volumes:
+    - name: page
+      configMap:
+        name: data-content
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: data
+  namespace: firedoor-v09c1
+spec:
+  type: ClusterIP
+  selector:
+    app: data-server
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      protocol: TCP
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: edge-client
+  namespace: firedoor-v09c1
+  labels:
+    role: edge
+spec:
+  automountServiceAccountToken: false
+  enableServiceLinks: false
+  terminationGracePeriodSeconds: 3
+  containers:
+    - name: client
+      image: busybox:1.36.1
+      imagePullPolicy: IfNotPresent
+      command: ["sh", "-c", "sleep 3600"]
+      securityContext:
+        allowPrivilegeEscalation: false
+        runAsNonRoot: true
+        runAsUser: 10001
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop: ["ALL"]
+      resources:
+        requests:
+          cpu: 10m
+          memory: 16Mi
+        limits:
+          memory: 96Mi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: trusted-client
+  namespace: firedoor-v09c1
+  labels:
+    role: trusted
+spec:
+  automountServiceAccountToken: false
+  enableServiceLinks: false
+  terminationGracePeriodSeconds: 3
+  containers:
+    - name: client
+      image: busybox:1.36.1
+      imagePullPolicy: IfNotPresent
+      command: ["sh", "-c", "sleep 3600"]
+      securityContext:
+        allowPrivilegeEscalation: false
+        runAsNonRoot: true
+        runAsUser: 10001
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop: ["ALL"]
+      resources:
+        requests:
+          cpu: 10m
+          memory: 16Mi
+        limits:
+          memory: 96Mi

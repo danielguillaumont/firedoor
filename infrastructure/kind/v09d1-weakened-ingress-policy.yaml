@@ -1,0 +1,21 @@
+# Firedoor v0.9D1. INTENTIONALLY INSECURE: disposable kind tests ONLY.
+# This retains the protected NetworkPolicy's name and selected destination,
+# but replacing role=trusted with an empty podSelector admits ALL pods in the
+# same namespace, including role=edge. Do NOT apply to real clusters.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-trusted-to-data
+  namespace: firedoor-v09c1
+spec:
+  podSelector:
+    matchLabels:
+      app: data-server
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector: {}
+      ports:
+        - protocol: TCP
+          port: 8080

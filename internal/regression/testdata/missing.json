@@ -1,0 +1,12 @@
+{
+  "schema_version": "firedoor.v09.regression.fixture.v1",
+  "source": "synthetic_fixture",
+  "run_id": "synthetic-missing",
+  "cluster": "firedoor-local",
+  "context": "kind-firedoor-local",
+  "profile": "hardened",
+  "route_id": "edge-to-data",
+  "transport": "HTTP/TCP",
+  "port": 8080,
+  "observed": "not_observed"
+}

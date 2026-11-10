@@ -1,0 +1,9 @@
+# Firedoor v0.9B1 - single-purpose disposable control-plane smoke cluster.
+# Networking is deliberately unavailable until a verified CNI is installed in 9B2.
+# Never mistake API reachability for workload or NetworkPolicy enforcement.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+networking:
+  disableDefaultCNI: true
+nodes:
+  - role: control-plane

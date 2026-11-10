@@ -1,0 +1,22 @@
+# Firedoor v0.9C2. Synthetic disposable-cluster ingress policy only.
+# Selects the data-server pod; allows role=trusted pods in the SAME namespace
+# to reach TCP/8080. Other pod ingress to data-server is not allowed.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-trusted-to-data
+  namespace: firedoor-v09c1
+spec:
+  podSelector:
+    matchLabels:
+      app: data-server
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              role: trusted
+      ports:
+        - protocol: TCP
+          port: 8080

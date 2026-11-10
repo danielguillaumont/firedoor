@@ -1,0 +1,10 @@
+# Firedoor v0.9B2 disposable two-node Calico validation only.
+# Distinct from the v0.9B1 API-only kind config.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+networking:
+  disableDefaultCNI: true
+  podSubnet: 192.168.0.0/16
+nodes:
+  - role: control-plane
+  - role: worker
