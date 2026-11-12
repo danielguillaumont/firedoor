@@ -1,0 +1,31 @@
+{
+  "schema_version": "firedoor.v10.fd004-h1-historical-assertion-review.v1",
+  "scenario_id": "FD-004",
+  "scenario_claim": "Frontend cannot directly reach protected data service after hardening",
+  "evidence_source": "user_supplied_sanitized_g1_projection_unattested",
+  "captured_utc": "2026-01-15T12:00:00Z",
+  "historical_assertion": "edge_to_data_timeout_consistent_with_claim_at_capture",
+  "supporting_routes": [
+    "edge-to-data"
+  ],
+  "observed_positive_controls": [
+    "edge-to-app",
+    "app-to-data",
+    "data-to-edge-control"
+  ],
+  "scenario_contract_status": "spec_only_not_implemented",
+  "scenario_verdict": "not_tested",
+  "contract_cluster": "kind-firedoor-local",
+  "evidence_identifies_cluster": false,
+  "contract_scope_verified": false,
+  "current_cluster_checked": false,
+  "current_enforcement_verified": false,
+  "original_receipt_authenticated": false,
+  "scenario_fully_certified": false,
+  "limitations": [
+    "A sanitized G1 projection omits the actual cluster identifier; the FD-004 contract cluster scope cannot be independently matched.",
+    "The FD-004 source contract remains spec_only_not_implemented; this review does not execute or certify the scenario or mapped controls.",
+    "HTTP timeouts and successful controls support a bounded historical observation, not general policy causation or isolation.",
+    "A local hash match is not independent authentication of the private F5 receipt. No current cluster or network test was run."
+  ]
+}
