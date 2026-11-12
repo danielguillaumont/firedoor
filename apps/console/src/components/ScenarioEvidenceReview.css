@@ -1,0 +1,23 @@
+.scenario-evidence-review { border-top: 2px solid #c84938; margin: 24px 0; padding-top: 18px; font-size: 12px; line-height: 1.55; color: #445e61; }
+.scenario-evidence-head { display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; align-items: center; }
+.scenario-evidence-head .section-label { margin: 0; font-size: 10px; }
+.scenario-evidence-head > strong { color: #9b553f; text-transform: uppercase; font-size: 10px; letter-spacing: .07em; }
+.scenario-evidence-review p { margin: 12px 0; }
+.scenario-evidence-picker { display: grid; gap: 6px; margin: 15px 0; font-size: 11px; font-weight: 700; color: #354e53; }
+.scenario-evidence-picker input { min-width: 0; max-width: 100%; font: inherit; }
+.scenario-evidence-error { background: #fff0e8; border-left: 3px solid #c84938; padding: 10px; color: #8e352d; }
+.scenario-evidence-summary { background: #e7eee9; border-left: 3px solid #4c886c; display: grid; gap: 3px; padding: 13px; margin-top: 12px; }
+.scenario-evidence-summary > span { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
+.scenario-evidence-summary > strong { color: #2d5f50; font-size: 16px; }
+.scenario-evidence-summary small { overflow-wrap: anywhere; }
+.scenario-evidence-subhead { color: #293e45; font-size: 12px; font-weight: 750; margin: 17px 0 5px; }
+.scenario-evidence-routes { color: #276c5a; }
+.scenario-evidence-gates { padding-left: 18px; margin: 8px 0; }
+.scenario-evidence-gates li { margin: 9px 0; }
+.scenario-evidence-gates li strong { display: block; text-transform: capitalize; color: #813e36; }
+.scenario-evidence-gates li span { display: block; }
+.scenario-evidence-warning { padding: 12px; margin: 15px 0; background: #f4e8db; color: #7e563e; }
+.scenario-evidence-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.scenario-evidence-actions .button { font-size: 11px; }
+.scenario-evidence-empty { font-style: italic; color: #647672; }
+@media (max-width: 470px) { .scenario-evidence-review { font-size: 12px; } .scenario-evidence-actions .button { width: 100%; } }

@@ -1,0 +1,54 @@
+{
+  "schema_version": "firedoor.v10.scenario-result.v1",
+  "scenario_id": "FD-004",
+  "scenario_claim": "Frontend cannot directly reach protected data service after hardening",
+  "outcome": "not_evaluated",
+  "evidence_relation": "historical_observation_consistent_with_claim_at_capture",
+  "evidence_source": "user_supplied_hash_checked_h1_review_unattested",
+  "observed_utc": "2026-01-15T12:00:00Z",
+  "supporting_routes": [
+    "edge-to-data"
+  ],
+  "positive_controls": [
+    "edge-to-app",
+    "app-to-data",
+    "data-to-edge-control"
+  ],
+  "mapped_controls_not_evaluated": [
+    "C-004",
+    "C-005"
+  ],
+  "requirements": [
+    {
+      "id": "scenario_implemented",
+      "status": "not_met",
+      "detail": "FD-004 remains spec_only_not_implemented."
+    },
+    {
+      "id": "contract_cluster_scope",
+      "status": "unverified",
+      "detail": "The sanitized projection does not identify the contract's kind-firedoor-local cluster."
+    },
+    {
+      "id": "evidence_origin",
+      "status": "unverified",
+      "detail": "The private F5 receipt is not independently authenticated by this review."
+    },
+    {
+      "id": "current_cluster_assessment",
+      "status": "not_performed",
+      "detail": "No current cluster inspection or traffic tests were executed."
+    }
+  ],
+  "scenario_evaluation_executed": false,
+  "contract_scope_verified": false,
+  "current_cluster_checked": false,
+  "original_receipt_authenticated": false,
+  "scenario_fully_certified": false,
+  "limitations": [
+    "Historical traffic observations support one bounded assertion, not a complete scenario assessment.",
+    "The FD-004 cluster scope and source receipt have not been independently verified.",
+    "Mapped controls C-004 and C-005 were not evaluated by this review.",
+    "This result does not establish current enforcement, policy causation, recovery, or production security."
+  ]
+}

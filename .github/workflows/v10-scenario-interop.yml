@@ -1,0 +1,43 @@
+# Post-merge, synthetic H1->H2->browser contract checks.
+# No cluster, Terraform, network probes, server, or private evidence access.
+name: v10 scenario contract interoperability
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  synthetic-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout public repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Go cross-language synthetic H1/H2 contract regression
+        run: |
+          test -z "$(gofmt -l internal/scenarioevaluation/interop_test.go)"
+          go test ./internal/scenarioevaluation/...
+          go vet ./internal/scenarioevaluation/...
+      - name: Set up Node 22
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: apps/console/package-lock.json
+      - name: Install locked console dependencies
+        working-directory: apps/console
+        run: npm ci --no-audit --no-fund
+      - name: Browser parser compatibility with public synthetic H2 fixture
+        working-directory: apps/console
+        run: |
+          npm run typecheck
+          npx --no-install vitest run src/api/historicalScenarioInterop.test.ts
