@@ -111,7 +111,10 @@ try {
         'scripts/v10/Test-FiredoorV10Slice10C3F1DeploymentPreflight.ps1',
         'scripts/v10/cmd/fd004deploymentpreflight/main.go'
     ) | Sort-Object
-    if ($b -cne 'feat/v10-fd004-deployment-authorization' -and $b -cne 'main') { throw 'Unexpected branch. Stop.' }
+    if ($b -cne 'feat/v10-fd004-deployment-authorization' -and
+        $b -cne 'feat/v10-fd004-controlled-apply' -and $b -cne 'main') {
+        throw 'Unexpected branch. Stop.'
+    }
     # Exact F2 source inventory is allowed for a fresh read-only preflight.
     # Any other untracked file still rejects the operation before private access.
     $f2Files = @(
@@ -127,8 +130,27 @@ try {
         @(Compare-Object $newFiles $untracked).Count -eq 0)
     $expectedF2 = ($untracked.Count -eq 12 -and
         @(Compare-Object $f2Inventory $untracked).Count -eq 0)
-    if ($tracked.Count -ne 0 -or
-        -not ($untracked.Count -eq 0 -or $expectedF1 -or $expectedF2)) {
+    # F3's single tracked source change is THIS read-only F1 runner. Before the
+    # F3 integration commit, no other tracked modification or new file is allowed.
+    # After merge, a clean checkout is accepted as usual.
+    $f3Files = @(
+        'docs/v10-fd004-controlled-apply-attempt.md',
+        'internal/recoverydeployapply/authorize.go',
+        'internal/recoverydeployapply/authorize_test.go',
+        'scripts/v10/cmd/fd004deployapply/main.go',
+        'scripts/v10/Invoke-FiredoorV10Slice10C3F3ControlledApply.ps1',
+        'scripts/v10/Test-FiredoorV10Slice10C3F3ControlledApply.ps1'
+    ) | Sort-Object
+    $f3Tracked = @(' M scripts/v10/Invoke-FiredoorV10Slice10C3F1DeploymentPreflight.ps1')
+    $expectedF3 = ($b -ceq 'feat/v10-fd004-controlled-apply' -and
+        $head -ceq 'd9e70cc' -and
+        $untracked.Count -eq 6 -and
+        @(Compare-Object $f3Files $untracked).Count -eq 0 -and
+        $tracked.Count -eq 1 -and
+        @(Compare-Object $f3Tracked $tracked).Count -eq 0)
+    $cleanIntegrated = ($tracked.Count -eq 0 -and $untracked.Count -eq 0)
+    $cleanF1F2Development = ($tracked.Count -eq 0 -and ($expectedF1 -or $expectedF2))
+    if (-not ($expectedF3 -or $cleanIntegrated -or $cleanF1F2Development)) {
         throw 'Source tree has unexpected tracked edits or untracked files. Stop.'
     }
     Write-Host 'PASS: PR #18 ancestry and expected source-only worktree.'
