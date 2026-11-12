@@ -24,6 +24,11 @@ describe('console UI evidence boundary', () => {
     expect(html).toContain('href="#firedoor-main"');
     expect(html).toContain('id="firedoor-main"');
     expect(html).toContain('History');
+    expect(html).toContain('id="firedoor-navigation"');
+    expect(html).toContain('aria-controls="firedoor-navigation"');
+    expect(html).toContain('aria-expanded="false"');
+    expect(html).toContain('Workspace navigation, current page Overview; open menu');
+    expect(html).toContain('aria-current="page"');
     expect(html).not.toContain('Load historical activity');
     expect(html).toContain('not cluster health');
     expect(html).not.toContain('3 ready pods');

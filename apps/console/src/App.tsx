@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { loadCapabilities, loadHealth, loadScenarios } from './api/client';
 import ProofLensView from './components/ProofLensView';
@@ -111,6 +111,9 @@ function CapabilitiesView({ data, retry }: { data: Remote<Capabilities>; retry: 
 export default function App() {
   const [page, setPage] = useState<Page>(() =>
     typeof window !== 'undefined' ? initialDemoViewFromSearch(window.location.search) : 'overview');
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const mobileNavButton = useRef<HTMLButtonElement>(null);
+  const selectedPageLabel = navItems.find((item) => item.page === page)?.label ?? 'Capabilities';
   const [refresh, setRefresh] = useState(0);
   const [health, setHealth] = useState<Remote<Health>>(() => loading<Health>());
   const [capabilities, setCapabilities] = useState<Remote<Capabilities>>(() => loading<Capabilities>());
@@ -127,8 +130,22 @@ export default function App() {
   }, [refresh]);
 
   return <><a className="skip-link" href="#firedoor-main">Skip to main content</a><div className="shell"><aside className="sidebar"><div className="brand"><BrandMark size={43}/><div className="brand-text"><strong>FIREDOOR</strong><small>CONTAIN THE SPREAD.</small></div></div>
+    <button ref={mobileNavButton} type="button" className="mobile-nav-toggle"
+      aria-controls="firedoor-navigation" aria-expanded={mobileNavOpen}
+      aria-label={`Workspace navigation, current page ${selectedPageLabel}; ${mobileNavOpen ? 'close' : 'open'} menu`}
+      onClick={() => setMobileNavOpen((open) => !open)}>
+      <span className="mobile-nav-toggle-copy"><small>WORKSPACE</small><strong>{selectedPageLabel}</strong></span>
+      <span className="mobile-nav-toggle-action">{mobileNavOpen ? 'Close' : 'Menu'} <Icon name="chevron" size={16}/></span>
+    </button>
     <div className="workspace-label">WORKSPACE <span>V0.7 DEV</span></div>
-    <nav aria-label="Main navigation" className="nav">{navItems.map((item) => <button key={item.label} type="button" disabled={item.page === null} onClick={() => item.page && setPage(item.page)} className={`nav-item ${page === item.page ? 'active' : ''}`} aria-current={page === item.page ? 'page' : undefined}><Icon name={item.icon} size={19}/><span>{item.label}</span>{item.note && <small>{item.note}</small>}</button>)}</nav>
+    <nav id="firedoor-navigation" aria-label="Main navigation"
+      className={`nav ${mobileNavOpen ? 'nav--open' : ''}`}
+      onKeyDown={(event) => { if (event.key === 'Escape' && mobileNavOpen) { setMobileNavOpen(false); mobileNavButton.current?.focus(); } }}>
+      {navItems.map((item) => <button key={item.label} type="button" disabled={item.page === null}
+        onClick={() => { if (item.page) { setPage(item.page); setMobileNavOpen(false); } }}
+        className={`nav-item ${page === item.page ? 'active' : ''}`}
+        aria-current={page === item.page ? 'page' : undefined}><Icon name={item.icon} size={19}/><span>{item.label}</span>{item.note && <small>{item.note}</small>}</button>)}
+    </nav>
     <div className="sidebar-bottom"><div className="sidebar-cap"><span className="tiny-square"/> DEVELOPMENT POSTURE</div><div className="sidebar-desc">No live validations, Terraform operations, or automatic evidence reads.</div><button type="button" className="sidebar-system" onClick={() => setPage('capabilities')}><Icon name="activity" size={17}/> API capabilities <Icon name="chevron" size={17}/></button></div>
   </aside><main id="firedoor-main" tabIndex={-1} className="main"><header className="topbar"><div className="breadcrumb">WORKSPACE <span>/</span> <strong>{page === 'overview' ? 'OVERVIEW' : page === 'scenarios' ? 'SCENARIOS' : page === 'containment' ? 'CONTAINMENT MAP' : page === 'live-proof' ? 'LIVE PROOF' : page === 'proof' ? 'PROOF LENS' : page === 'controls' ? 'CONTROLS' : page === 'environment' ? 'ENVIRONMENT' : page === 'history' ? 'HISTORY' : 'CAPABILITIES'}</strong></div><div className="topbar-actions"><ApiState health={health}/><button className="refresh-button" type="button" onClick={retry} aria-label="Refresh local API responses" title="Refresh local API responses"><Icon name="refresh" size={17}/></button></div></header><div className="content" key={page}>{page === 'overview' ? <Overview health={health} capabilities={capabilities} scenarios={scenarios} retry={retry} navigate={setPage}/> : page === 'scenarios' ? <ScenarioView data={scenarios} retry={retry}/> : page === 'live-proof' ? <LiveProofView/> : page === 'containment' ? <ContainmentMapView key={`${refresh}-${capabilities.state}-${capabilities.data?.mode ?? 'unavailable'}`} capabilities={capabilities.data} capabilityLoading={capabilities.state === 'loading'}/> : page === 'proof' ? <ProofLensView key={`${refresh}-${capabilities.state}-${capabilities.data?.mode ?? 'unavailable'}`} capabilities={capabilities.data}/> : page === 'controls' ? <ControlsView refresh={refresh}/> : page === 'environment' ? <EnvironmentView capabilities={capabilities.data} capabilityLoading={capabilities.state === 'loading'}/> : page === 'history' ? <HistoryView key={`${refresh}-${capabilities.state}-${capabilities.data?.mode ?? 'unavailable'}`} capabilities={capabilities.data} capabilityLoading={capabilities.state === 'loading'}/> : <CapabilitiesView data={capabilities} retry={retry}/>}</div><footer className="footer"><span>FIREDOOR / LOCAL INSPECTION DESK</span><span>GO ENGINE <b>·</b> TERRAFORM INTENT <b>·</b> KUBERNETES EVIDENCE</span><span>V0.7 DEV / READ-ONLY & EVIDENCE-SCOPED</span></footer></main></div></>;
 }

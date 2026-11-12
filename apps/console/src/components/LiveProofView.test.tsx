@@ -20,6 +20,9 @@ describe('G2 evidence scope and user-selected JSON', () => {
     expect(html).toContain('NO FILE LOADED');
     expect(html).toContain('No cluster inspected');
     expect(html).toContain('Choose G1 sanitized historical proof JSON');
+    expect(html).toContain('No local projection selected');
+    expect(html).toContain('aria-live="polite"');
+    expect(html).not.toContain('Loaded: ');
     expect(html).not.toContain('Captured, not current.');
     expect(html).not.toContain('NETWORK TRAFFIC ENFORCEMENT VERIFIED');
   });
@@ -35,6 +38,7 @@ describe('G2 evidence scope and user-selected JSON', () => {
     expect(html).toContain('Captured, not current.');
     expect(html).toContain('2026-11-12T03:27:30.2363946Z');
     expect(html).toContain('Five HTTP paths demonstrate bounded behavior');
+    expect(html).toContain('font-size="14"');
     expect(html).not.toContain('terraform_state_sha256');
     expect(html).not.toContain('kubeconfig');
     expect(html).not.toContain('10.96.');

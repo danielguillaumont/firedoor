@@ -53,14 +53,14 @@ export function LiveProofDiagram({ proof, selected }: { proof: HistoricalLivePro
         <rect x={x - 3} y="164" width="198" height="100" rx="7" fill="#0b1d24" opacity=".8"/>
         <rect x={x} y="160" width="192" height="94" rx="5" fill="#233e46" stroke="#6d8588" strokeWidth="1.5" />
         <rect x={x + 16} y="178" width="7" height="7" rx="1" fill={zone === 'data' ? '#e3b375' : '#7cd5a3'}/>
-        <text x={x + 32} y="187" fill="#b7c7c3" fontSize="11" letterSpacing="1.8" fontWeight="700">{details.code}</text>
-        <text x={x + 16} y="222" fill="#f8f5eb" fontSize="30" fontWeight="760">{details.title}</text>
-        <text x={x + 16} y="241" fill="#a8bdbe" fontSize="11">{details.service}</text>
+        <text x={x + 32} y="187" fill="#b7c7c3" fontSize="14" letterSpacing="1.4" fontWeight="700">{details.code}</text>
+        <text x={x + 16} y="222" fill="#f8f5eb" fontSize="34" fontWeight="760">{details.title}</text>
+        <text x={x + 16} y="241" fill="#a8bdbe" fontSize="14">{details.service}</text>
       </g>;
     })}
-    <text x="30" y="30" fontSize="10" letterSpacing="2.3" fill="#89aaa9">FIREDOOR / 3-ZONE TESTBED</text>
-    <text x="950" y="30" fontSize="10" textAnchor="end" letterSpacing="1.5" fill="#a8bdbe">HTTP / PORT 8080</text>
-    <text x="490" y="401" textAnchor="middle" fontSize="11" fill="#a4b5b3">{proof ? 'Historical observed paths · illustrative layout, not a packet trace' : 'No evidence loaded · directional outcomes intentionally hidden'}</text>
+    <text x="30" y="30" fontSize="13" letterSpacing="1.7" fill="#89aaa9">FIREDOOR / 3-ZONE TESTBED</text>
+    <text x="950" y="30" fontSize="13" textAnchor="end" letterSpacing="1.2" fill="#a8bdbe">HTTP / PORT 8080</text>
+    <text x="490" y="401" textAnchor="middle" fontSize="13" fill="#b7c9c5">{proof ? 'Historical observed paths · illustrative layout, not a packet trace' : 'No evidence loaded · directional outcomes intentionally hidden'}</text>
   </svg></div>;
 }
 
@@ -107,13 +107,14 @@ export function LiveProofReport({ proof }: { proof: HistoricalLiveProof }) {
 
 export default function LiveProofView() {
   const [proof, setProof] = useState<HistoricalLiveProof | null>(null);
+  const [loadedFileName, setLoadedFileName] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const handleFile = async (event: ChangeEvent<HTMLInputElement>) => {
     const selected = event.currentTarget.files?.[0];
     event.currentTarget.value = ''; // Same file can be selected again; never persist the path.
     if (!selected) return;
-    setProof(null); setError(null);
+    setProof(null); setLoadedFileName(null); setError(null);
     if (selected.size > MAX_HISTORICAL_PROOF_BYTES || selected.size === 0 || !selected.name.toLowerCase().endsWith('.json')) {
       setError('Choose a valid G1 JSON projection smaller than 32 KiB. No evidence was loaded.');
       return;
@@ -123,6 +124,7 @@ export default function LiveProofView() {
       const text = await selected.text();
       const checked = parseHistoricalLiveProofFile(text);
       setProof(checked);
+      setLoadedFileName(selected.name);
     } catch {
       setError('The file does not match the strict G1 historical-proof display contract. Nothing was loaded.');
     } finally { setLoading(false); }
@@ -133,7 +135,13 @@ export default function LiveProofView() {
       <div className="lp-hero-art" aria-hidden="true"><span className="lp-orbit lp-orbit-one"/><span className="lp-orbit lp-orbit-two"/><span className="lp-orbit lp-orbit-three"/><span className="lp-orbit-core">F / D</span></div>
     </div>
     <section className="lp-import" aria-label="Load sanitized historical proof"><div className="lp-import-info"><KeyLabel>00 / INPUT SOURCE</KeyLabel><h2>{proof ? 'Historical projection loaded' : 'Choose your verified projection.'}</h2><p>{proof ? 'Five observations are available below. You can replace or clear this local browser view.' : 'Select Firedoor-G1-SanitizedHistoricalProof.json from Downloads. No data is uploaded, stored, or read automatically.'}</p></div>
-      <div className="lp-import-actions"><label htmlFor="lp-proof-file">Select G1 JSON file</label><input id="lp-proof-file" aria-label="Choose G1 sanitized historical proof JSON" type="file" accept=".json,application/json" onChange={(event) => { void handleFile(event); }} disabled={loading}/>{proof && <button type="button" className="lp-clear" onClick={() => { setProof(null); setError(null); }}>Clear evidence</button>}</div>
+      <div className="lp-import-actions"><label htmlFor="lp-proof-file">Select G1 JSON file</label>
+        <input id="lp-proof-file" aria-label="Choose G1 sanitized historical proof JSON" type="file" accept=".json,application/json" onChange={(event) => { void handleFile(event); }} disabled={loading}/>
+        <span className={`lp-file-status ${loadedFileName ? 'lp-file-status-loaded' : ''}`} role="status" aria-live="polite" title={loadedFileName ?? undefined}>
+          {loadedFileName ? `Loaded: ${loadedFileName}` : 'No local projection selected'}
+        </span>
+        {proof && <button type="button" className="lp-clear" onClick={() => { setProof(null); setLoadedFileName(null); setError(null); }}>Clear evidence</button>}
+      </div>
     </section>
     {error && <div className="lp-error" role="alert"><Icon name="alert" size={18}/><span>{error}</span></div>}
     {loading && <p className="lp-loading" role="status">Validating historical projection locally…</p>}

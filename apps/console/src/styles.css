@@ -24,6 +24,8 @@ button:disabled { cursor: not-allowed; }
 .brand-text small { font-size: 8px; font-weight: 750; letter-spacing: 1.6px; color: #c6d3d3; }
 .workspace-label { display: flex; justify-content: space-between; gap: 8px; font-size: 10px; font-weight: 730; letter-spacing: 1.9px; padding: 0 24px 12px; color: #a8bbbc; }
 .workspace-label span { letter-spacing: .3px; border: 1px solid #627a82; color: #9db9bc; padding: 2px 5px; font-size: 9px; border-radius: 3px; }
+/* At desktop widths the full navigation remains visible. Mobile gets a disclosure menu. */
+.mobile-nav-toggle { display:none; }
 .nav { display: flex; flex-direction: column; gap: 5px; padding: 5px 11px 18px; }
 .nav-item { width: 100%; border: 0; padding: 12px 14px; display: flex; gap: 13px; align-items: center; color: #c1cdcf; background: none; border-radius: 5px; text-align: left; font-size: 14px; font-weight: 550; transition: background-color .15s; }
 .nav-item span { flex: 1; }
@@ -127,7 +129,32 @@ h2 { font-size: clamp(23px, 1.95vw, 30px); font-weight: 730; line-height: 1.2; m
 .capability-row>div:nth-child(2) { display: flex; flex: 1; flex-direction: column; gap: 6px; min-width: 0; }.capability-row strong { font-size: 13px; }.capability-row small { color: #667b76; font-size: 12px; overflow-wrap: anywhere; }
 .footer { padding: 18px 48px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; border-top: 1px solid #ded8cf; font: 650 10px Consolas, "Cascadia Mono", monospace; color: #677b77; letter-spacing: .3px; }.footer b { color: #c84938; margin: 0 4px; }
 @media(max-width: 1190px) { .content { padding: 34px 30px 55px; }.topbar { padding: 0 30px; }.sidebar { width: 224px; }.shell { grid-template-columns: 224px minmax(0, 1fr); }.principle { flex-direction: column; align-items: flex-start; }.footer { padding: 18px 30px; } }
-@media(max-width: 920px) { .shell { display: block; }.sidebar { min-height: 0; width: 100%; }.brand { padding: 14px 18px 12px; }.workspace-label { display: none; }.nav { display: flex; flex-direction: row; overflow-x: auto; padding: 0 9px 11px; }.nav-item { flex: 0 0 auto; width: auto; padding: 10px; font-size: 13px; gap: 6px; }.nav-item small { font-size: 8px; }.nav-item.active:before { top: auto; bottom: 0; left: 9px; right: 9px; width: auto; height: 2px; }.sidebar-bottom { display: none; }.overview-grid { grid-template-columns: 1fr; }.title-ornament { display: none; } }
+@media(max-width: 920px) {
+  .shell { display:block; }
+  .sidebar { min-height:0; width:100%; flex-direction:row; flex-wrap:wrap; align-items:center; }
+  .brand { flex:1 1 auto; padding:14px 18px 12px; min-width:0; }
+  .workspace-label { display:none; }
+  .mobile-nav-toggle { display:flex; align-items:center; gap:14px; justify-content:space-between; padding:9px 12px; margin:8px 16px 8px 0; min-height:47px; min-width:180px; max-width:calc(100% - 32px); border:1px solid #70858a; border-radius:3px; background:#344c55; color:#fff; text-align:left; }
+  .mobile-nav-toggle-copy { display:flex; flex-direction:column; gap:2px; min-width:0; }
+  .mobile-nav-toggle-copy small { font-size:9px; font-weight:750; letter-spacing:1.1px; color:#d6b47b; }
+  .mobile-nav-toggle-copy strong { font-size:13px; overflow-wrap:anywhere; line-height:1.3; }
+  .mobile-nav-toggle-action { display:inline-flex; gap:6px; align-items:center; color:#e9dfcf; font-size:12px; font-weight:700; white-space:nowrap; }
+  .mobile-nav-toggle[aria-expanded="true"] .mobile-nav-toggle-action svg { transform:rotate(90deg); }
+  .mobile-nav-toggle:focus-visible { outline:3px solid #e2ac53; outline-offset:2px; }
+  .nav { display:none; flex-basis:100%; width:100%; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px; padding:10px 16px 16px; border-top:1px solid #48616b; overflow:visible; }
+  .nav.nav--open { display:grid; }
+  .nav-item { width:100%; min-width:0; padding:12px; font-size:13px; gap:8px; }
+  .nav-item span { overflow-wrap:anywhere; }
+  .nav-item.active:before { top:8px; bottom:8px; left:0; right:auto; width:3px; height:auto; }
+  .sidebar-bottom { display:none; }
+  .overview-grid { grid-template-columns:1fr; }
+  .title-ornament { display:none; }
+}
+@media(max-width: 480px) {
+  .brand { flex-basis:100%; padding-bottom:9px; }
+  .mobile-nav-toggle { flex:1 1 100%; margin:0 16px 12px; max-width:none; }
+}
+@media(max-width: 359px) { .nav { grid-template-columns:1fr; } }
 @media(max-width: 640px) { .topbar { height: 56px; padding: 0 18px; }.api-state { font-size: 11px; }.breadcrumb { font-size: 10px; }.topbar-actions { gap: 9px; }.content { padding: 26px 17px 42px; }.title-row { margin-bottom: 22px; }.metrics-grid { grid-template-columns: 1fr; gap: 8px; }.metric { min-height: 0; padding: 17px; }.metric-value { font-size: 30px; }.panel { padding: 21px; }.panel-head { flex-wrap: wrap; }.compact-scenario { gap: 8px; }.compact-scenario .status-pill { font-size: 8px; }.scenario-grid { grid-template-columns: 1fr; }.principle { padding: 20px; }.principle-stages { flex-wrap: wrap; }.footer { padding: 20px 18px; }.load-error { flex-wrap: wrap; } }
 @media(prefers-reduced-motion: reduce) { *,*:before,*:after { transition-duration: 0s !important; animation-duration: 0s !important; } }
 
@@ -370,3 +397,13 @@ h2 { font-size: clamp(23px, 1.95vw, 30px); font-weight: 730; line-height: 1.2; m
 .cm-history-limitations li { margin-bottom:7px; }
 .cm-history-limitations p { font-size:10.5px; color:#6a7b77; margin-bottom:0; }
 @media(max-width:850px) { .cm-history-summary { flex-direction:column; }.cm-history-metrics,.cm-history-grid { grid-template-columns:1fr; }.cm-history { padding:16px; } }
+
+/* G3D-B1: keep the application shell inside a phone viewport.
+   The evidence graphic shrinks in its own panel; never hide root overflow as a fix. */
+@media (max-width: 640px) {
+  .shell, .main, .content { min-width: 0; max-width: 100%; }
+  .content { width: 100%; }
+  .topbar { min-width: 0; gap: 8px; }
+  .breadcrumb { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .topbar-actions { flex-shrink: 0; }
+}
